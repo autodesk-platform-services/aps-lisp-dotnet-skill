@@ -65,6 +65,8 @@ Always ask or infer which target the user needs:
 
 Default to `--target both` unless user specifies otherwise.
 
+**If the target includes DA, see the Design Automation Guardrail below before finalizing** — no interactive input surface (dialogs or command-line prompts) belongs on a DA-facing entry point.
+
 ## Execution Mode — Ask Once, Never Re-Ask
 
 Side-effecting steps in this procedure (`dotnet new` scaffold, `dotnet build`, `dotnet test`, `RunIntegrationTests.ps1`, `New-Bundle.ps1`) can be run two ways. **Ask which mode the user wants during Step 0, alongside the environment paths — then follow it silently for the rest of the migration. Do not ask again per-step; that produces exactly the ambiguous mid-flow interruptions this section exists to prevent.**
@@ -110,6 +112,28 @@ Also check for a `.dcl` file with the same base name in the same folder.
 > Reply "migrate non-dialog code only" to proceed with partial migration, or wait for v2.
 
 If the user explicitly says "migrate non-dialog code only", proceed but replace every DCL call with a `// TODO v2` stub — never generate DCL-equivalent C# for dialog code.
+
+## Design Automation Guardrail — Verify Before Finalizing a DA Target
+
+**If the target is `da` or `both`, do not consider the migration done until every command reachable from the DA bundle has passed this checklist.** A DA Activity has no display, no message pump, and no live console — a command that silently relies on any interactive input will not error cleanly at build time; it will hang or fail inside an Autodesk-hosted cloud worker, which is far harder to debug than a desktop crash. Treat this with the same seriousness as the DCL Guardrail, not as a footnote.
+
+For every `[CommandMethod]` intended for the DA activity, check for and eliminate:
+
+- `getfiled` → `OpenFileDialog`/`SaveFileDialog` — any GUI dialog. **Zero tolerance.**
+- `getstring`/`getkword`/`getpoint`/`getdist`/`getreal`/`getint`/`getangle` → `ed.GetString`/`ed.GetKeywords`/`ed.GetPoint`/etc. Even though these *can* be driven via a `.scr` with pre-supplied answers (used for `accoreconsole` testing elsewhere in this skill), a real DA Activity does not feed a script of typed answers — its inputs are pre-mapped parameter files. Any reliance on these in the DA-facing path is a defect, not a testing inconvenience.
+- Anything requiring on-screen entity selection (`ssget` with no filter, "select objects:" prompts) with no non-interactive fallback (e.g. "select all of type X" is fine — typed/filtered `ssget` patterns translate directly to `OfType<T>()`; open-ended interactive pick prompts do not).
+
+**Remediation:** generate a separate, purely parameterized entry point for the DA activity — inputs as method arguments or read from a fixed, DA-parameter-mapped file location, zero prompts of any kind — reusing the same Helpers/service logic already split out from the interactive desktop `Commands.cs` methods (Step 3's Helpers/ derivation rule exists partly for this reason). The interactive desktop commands (GUI and CLI-prompt variants alike) stay in the desktop bundle only.
+
+**If a command's behavior is fundamentally interactive** (e.g. it exists specifically to let a human pick geometry on screen, with no sensible non-interactive equivalent), do not silently ship a broken DA version of it. Say so explicitly: flag it as desktop-only and exclude it from the DA bundle, rather than generating a DA entry point that will hang in production.
+
+**Package rule — this applies to the shipped plugin assembly itself, not just test projects.** The same `AcMgd.dll`-crashes-headless fact that governs integration test packages (see Step 4) governs the real DA bundle too, because the DA execution engine is architecturally the same headless core as `accoreconsole`:
+- **Desktop bundle** → `AutoCAD.NET` (full package, `AcMgd.dll` included — fine, real desktop AutoCAD has a UI).
+- **DA bundle** → [`AutoCAD.NET.Core`](https://www.nuget.org/packages/AutoCAD.NET.Core) (no `AcMgd.dll` — required, or the DA activity crashes the same way `accoreconsole` does with `AutoCAD.NET`).
+
+**This means a single `.csproj` cannot serve both targets for `--target both`.** A project referencing `AutoCAD.NET` would crash in the real DA engine; a project referencing only `AutoCAD.NET.Core` can't use desktop-only APIs (MDI window management, WPF, palettes) if any interactive desktop command needs them. Until this is resolved with a proper two-project split in the `dotnet new` template (open item — not yet built), treat `--target both` as **two separate plugin projects** sharing the same `Helpers`/`Models` logic (which only need `Database`/`Geometry`/`Runtime` types present in both packages): one referencing `AutoCAD.NET` exposing the interactive desktop commands, one referencing `AutoCAD.NET.Core` exposing only the DA-safe parameterized entry points from the remediation step above. Flag this explicitly to the user rather than silently generating a single project that's wrong for one of the two targets.
+
+**Deploying and testing against real APS Design Automation:** the `dotnet new acad-lisp` scaffold includes `da/APS-Common.ps1` (generic REST helpers — auth, AppBundle/Activity/WorkItem lifecycle, OSS upload/download — no per-migration edits needed) and `da/Deploy-And-Test-DA.ps1` (deploys the bundle + activity, submits a test WorkItem against the DA entry point, downloads the result; reads its shape from `da/activity.json`/`da/params.example.json`). Claude still authors `da/activity.json` and `da/params.example.json` per migration in Step 5 — they contain the actual DA command name and parameter fields, which are migration-specific and can't be templated generically. Requires `$env:APS_CLIENT_ID`/`$env:APS_CLIENT_SECRET` (an APS app with Design Automation + Data Management scopes) and a real seed `.dwg` to submit.
 
 ---
 
@@ -298,8 +322,13 @@ The template produces a complete scaffold with TFM, NuGet versions, `PackageCont
       TestSetupCommands.cs              ← [CommandMethod] stub   ← Claude fills (Step 4)
     IntegrationTests.cs                 ← placeholder test        ← Claude fills (Step 4)
     RunIntegrationTests.ps1             ← pre-wired for chosen AutoCAD version
+  da/
+    APS-Common.ps1                      ← generic APS REST helpers, ready to use
+    Deploy-And-Test-DA.ps1              ← deploys bundle+activity, submits a test WorkItem
   AGENTS.md                             ← AI coding context for the generated project
 ```
+
+The `da/` folder is only relevant if the target includes DA — `activity.json` and `params.example.json` are authored by Claude in Step 5 (migration-specific content), while `APS-Common.ps1`/`Deploy-And-Test-DA.ps1` are ready to use as scaffolded. See the Design Automation Guardrail for what belongs in the DA-facing entry point.
 
 After the user runs the scaffold command, read the generated stubs and proceed to Step 3.
 
@@ -405,6 +434,10 @@ Name the command `<ProjectName>SetupTest` (template pre-fills this).
 - Pin `System.Drawing.Common` to `8.0.0` explicitly — `ExtentReports` pulls `RazorEngine.NetCore.nixFix` → `System.Drawing.Common 5.0.0`, flagged `NU1904` (GHSA-rxg9-xrhp-64gj). Already included in the `dotnet new acad-lisp` template.
 
 Run tests per the chosen Execution Mode: **Auto** runs `dotnet test` and `RunIntegrationTests.ps1` directly; **Pair-programming** prints both commands and waits for the user's results before continuing.
+
+**If the user wants to manually compare LISP vs .NET behavior in real AutoCAD desktop:** warn them not to load both in the same session. Migrated commands intentionally reuse the exact LISP command names (that's the point — a drop-in replacement), so loading both means the second one either fails to register (duplicate command name) or silently shadows the first, making it impossible to tell which implementation actually ran.
+
+**Closing and reopening the drawing does NOT achieve this isolation.** AutoLISP definitions and `NETLOAD`ed assemblies live in the running `acad.exe` process, not the document — `CLOSE` then `OPEN` within one continuous session leaves LISP's `defun c:*` commands (or a previously loaded .NET assembly) still active in memory. True isolation requires quitting AutoCAD entirely and relaunching it between the LISP test and the .NET test — two separate process launches, not two documents in one process. If scripting this via `.scr`, that means two separate script files run as two separate AutoCAD launches, never `CLOSE`/`OPEN` inside a single script expecting a clean command table.
 
 ### Step 5 — Bundle and Package
 
@@ -540,6 +573,8 @@ private void DbgPrint(string msg)
 
 ## Known Edge Cases
 
+**Not every pattern in the original LISP is intended behavior — some are genuine bugs.** When a check gates the *common* case behind a condition that usually fails (e.g. requiring a file to already exist before an operation whose whole purpose is to create it), that's almost always an authoring mistake, not a design choice worth preserving. Fix the underlying logic rather than faithfully reproducing dysfunction, and leave a comment explaining what the original did and why it was changed — see `(findfile ...)` gating an export operation below for the concrete case this rule came from. When genuinely unsure whether odd behavior is intentional (e.g. a business rule vs. a slip), preserve it and flag with a TODO instead of guessing.
+
 | Pattern | Risk | Resolution |
 |---------|------|------------|
 | `vl-catch-all-apply` | Error swallowing | Use `try/catch`, log to editor |
@@ -549,8 +584,9 @@ private void DbgPrint(string msg)
 | DCL dialogs | No direct .NET equivalent | v2: WPF / Palette / CUIX |
 | `(command ...)` sequences | Runtime-dependent | Avoid; use direct API calls |
 | `(findfile ...)` | LISP searches ACAD support file paths (`ACAD` sysvar), not just the literal path | `File.Exists`/`File.Open` only check the literal path — document as a v2 TODO if the original relied on support-path search, don't silently narrow behavior |
+| `(findfile ...)` gating a write/export operation | `findfile` only returns non-nil if the file **already exists** — if the original code requires `findfile` to succeed before it will export/create, it can never write a brand-new file, only overwrite an existing one. This is a real bug in several jtbworld.com samples (e.g. `viewsIO.lsp`'s `c:-ExportViews`), not intentional design. | Fix it: only gate the *overwrite confirmation* on `File.Exists`, and export unconditionally when the file doesn't exist yet. Comment the deviation from literal LISP behavior. |
 | `DBVisualStyle` string-valued traits | No typed setter exists for many `VisualStyleProperty` values (readable via generic trait enumeration, not settable the same way) | Capture on export via the generic trait API; document as a known limitation on import rather than guessing a setter that doesn't exist |
-| `getfiled` (LISP file picker) | GUI dialog, needs a .NET equivalent | `System.Windows.Forms.OpenFileDialog`/`SaveFileDialog` + `<UseWindowsForms>true</UseWindowsForms>` in the csproj — check for an `Autodesk.AutoCAD.Windows` wrapper first, but don't assume one exists for every entity/version; WinForms is the safe fallback |
+| `getfiled` (LISP file picker) | GUI dialog, needs a .NET equivalent; also incompatible with DA — see Conversion Targets | `System.Windows.Forms.OpenFileDialog`/`SaveFileDialog` + `<UseWindowsForms>true</UseWindowsForms>` in the csproj — check for an `Autodesk.AutoCAD.Windows` wrapper first, but don't assume one exists for every entity/version; WinForms is the safe fallback. For a DA target, generate a parameterized entry point instead — no dialog. |
 
 ---
 

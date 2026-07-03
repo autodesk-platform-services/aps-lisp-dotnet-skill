@@ -1,0 +1,7 @@
+_FILEDIA
+0
+(close (open "D:/Projects/2026/lisp-to-dotnet-skill/dotnet-outputs/ViewsIO/SampleDrawing/views_lisp.txt" "w"))
+(load "D:/Projects/2026/lisp-to-dotnet-skill/lisps/viewsIO.lsp")
+-EXPORTVIEWS
+D:\Projects\2026\lisp-to-dotnet-skill\dotnet-outputs\ViewsIO\SampleDrawing\views_lisp.txt
+Yes

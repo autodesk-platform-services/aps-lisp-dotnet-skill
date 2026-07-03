@@ -1,0 +1,41 @@
+[
+  {
+    "Name": "BoxA_Conceptual",
+    "TargetX": 0,
+    "TargetY": 0,
+    "TargetZ": 0,
+    "ViewDirX": 0,
+    "ViewDirY": 0,
+    "ViewDirZ": 1,
+    "Height": 20,
+    "Width": 51.12398609501738,
+    "TwistAngle": 0,
+    "VisualStyleName": "Conceptual"
+  },
+  {
+    "Name": "BoxB_Wireframe",
+    "TargetX": 0,
+    "TargetY": 0,
+    "TargetZ": 0,
+    "ViewDirX": 0,
+    "ViewDirY": 0,
+    "ViewDirZ": 1,
+    "Height": 20,
+    "Width": 51.12398609501738,
+    "TwistAngle": 0,
+    "VisualStyleName": "Wireframe"
+  },
+  {
+    "Name": "BoxC_Realistic",
+    "TargetX": 0,
+    "TargetY": 0,
+    "TargetZ": 0,
+    "ViewDirX": 0,
+    "ViewDirY": 0,
+    "ViewDirZ": 1,
+    "Height": 20,
+    "Width": 51.12398609501738,
+    "TwistAngle": 0,
+    "VisualStyleName": "Realistic"
+  }
+]

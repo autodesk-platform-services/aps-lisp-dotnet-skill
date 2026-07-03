@@ -1,0 +1,6 @@
+_FILEDIA
+0
+NETLOAD
+D:\ToDelete\lisp_net_demo\ViewsIO\bin\Debug\net10.0-windows\ViewsIO.dll
+-EXPORTVIEWS
+D:\Projects\2026\lisp-to-dotnet-skill\dotnet-outputs\ViewsIO\SampleDrawing\views_dotnet.json
