@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Autodesk Developer Advocacy",
+  "classifications": ["AutoCAD", ".NET", "Plugin", "LISP Migration"],
+  "name": "AutoCAD LISP Migration",
+  "shortName": "acad-lisp",
+  "description": "AutoCAD .NET C# plugin scaffold for AutoLISP-to-.NET migrations. Includes unit tests (xUnit) and accoreconsole integration tests (NUnit + ExtentReports).",
+  "identity": "Autodesk.AutoCAD.LispMigration.1.0",
+  "sourceName": "MyPlugin",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "AutoCADVersion": {
+      "type": "parameter",
+      "datatype": "choice",
+      "choices": [
+        { "choice": "2025", "description": "AutoCAD 2025 — R25.0 / net8.0-windows / 25.0.0" },
+        { "choice": "2026", "description": "AutoCAD 2026 — R25.1 / net8.0-windows / 25.1.0" },
+        { "choice": "2027", "description": "AutoCAD 2027 — R26.0 / net10.0-windows / 26.0.0" }
+      ],
+      "defaultValue": "2027",
+      "description": "Target AutoCAD version (determines TFM, NuGet version, bundle serial)"
+    },
+    "acad2025": {
+      "type": "computed",
+      "value": "(AutoCADVersion == \"2025\")"
+    },
+    "acad2026": {
+      "type": "computed",
+      "value": "(AutoCADVersion == \"2026\")"
+    },
+    "acad2027": {
+      "type": "computed",
+      "value": "(AutoCADVersion == \"2027\")"
+    },
+    "net8target": {
+      "type": "computed",
+      "value": "(AutoCADVersion == \"2025\" || AutoCADVersion == \"2026\")"
+    }
+  },
+  "specialCustomOperations": {
+    "**/*.csproj": {
+      "operations": [{
+        "type": "conditional",
+        "configuration": {
+          "if": ["<!--#if"],
+          "else": ["<!--#else"],
+          "elseif": ["<!--#elseif"],
+          "endif": ["<!--#endif"],
+          "trim": true,
+          "wholeLine": true,
+          "evaluator": "C++"
+        }
+      }]
+    },
+    "**/*.xml": {
+      "operations": [{
+        "type": "conditional",
+        "configuration": {
+          "if": ["<!--#if"],
+          "else": ["<!--#else"],
+          "elseif": ["<!--#elseif"],
+          "endif": ["<!--#endif"],
+          "trim": true,
+          "wholeLine": true,
+          "evaluator": "C++"
+        }
+      }]
+    },
+    "**/*.ps1": {
+      "operations": [{
+        "type": "conditional",
+        "configuration": {
+          "if": ["#if"],
+          "else": ["#else"],
+          "elseif": ["#elseif"],
+          "endif": ["#endif"],
+          "trim": true,
+          "wholeLine": true,
+          "evaluator": "C++"
+        }
+      }]
+    }
+  }
+}

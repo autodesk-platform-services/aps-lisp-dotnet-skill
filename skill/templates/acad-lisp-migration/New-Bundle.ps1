@@ -1,0 +1,72 @@
+#Requires -Version 7
+# Creates the MyPlugin.bundle folder structure for AutoCAD Autoloader deployment.
+# Bundle layout per Autodesk Autoloader spec:
+#   MyPlugin.bundle/
+#     PackageContents.xml
+#     Contents/Win64/
+#       MyPlugin.dll
+#       MyPlugin.pdb
+#
+# Usage:
+#   ./New-Bundle.ps1
+#   ./New-Bundle.ps1 -Config Release -Deploy
+param(
+    [string] $Config     = "Debug",
+#if (net8target)
+    [string] $Tfm        = "net8.0-windows",
+#else
+    [string] $Tfm        = "net10.0-windows",
+#endif
+    [string] $BundleRoot = "$PSScriptRoot\MyPlugin.bundle",
+    [switch] $Deploy     # copy bundle to %APPDATA%\Autodesk\ApplicationPlugins
+)
+
+$ErrorActionPreference = "Stop"
+
+$projectDir  = $PSScriptRoot
+$csproj      = Join-Path $projectDir "MyPlugin.csproj"
+$binDir      = Join-Path $projectDir "bin\$Config\$Tfm"
+$contentsDir = Join-Path $BundleRoot "Contents\Win64"
+$pkgXml      = Join-Path $projectDir "PackageContents.xml"
+
+# --- Validate ---
+if (-not (Test-Path $csproj))  { Write-Error "Project not found: $csproj";        exit 1 }
+if (-not (Test-Path $pkgXml))  { Write-Error "PackageContents.xml not found: $pkgXml"; exit 1 }
+
+# --- Build ---
+Write-Host "Building $Config / $Tfm ..."
+dotnet build $csproj -c $Config -f $Tfm --nologo -v q
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+$dll = Join-Path $binDir "MyPlugin.dll"
+if (-not (Test-Path $dll)) { Write-Error "DLL not found after build: $dll"; exit 1 }
+
+# --- Create bundle structure ---
+Write-Host "Creating bundle: $BundleRoot"
+New-Item -ItemType Directory -Force $contentsDir | Out-Null
+
+# PackageContents.xml at bundle root
+Copy-Item $pkgXml (Join-Path $BundleRoot "PackageContents.xml") -Force
+
+# Plugin DLL + PDB into Contents\Win64\
+Copy-Item $dll (Join-Path $contentsDir "MyPlugin.dll") -Force
+$pdb = Join-Path $binDir "MyPlugin.pdb"
+if (Test-Path $pdb) { Copy-Item $pdb (Join-Path $contentsDir "MyPlugin.pdb") -Force }
+
+Write-Host "Bundle ready: $BundleRoot"
+Write-Host "Contents:"
+Get-ChildItem $BundleRoot -Recurse | ForEach-Object {
+    "  $($_.FullName.Replace($BundleRoot, '.'))"
+}
+
+# --- Optional: deploy to ApplicationPlugins ---
+if ($Deploy) {
+    $appPlugins = Join-Path $env:APPDATA "Autodesk\ApplicationPlugins"
+    $dest       = Join-Path $appPlugins "MyPlugin.bundle"
+    New-Item -ItemType Directory -Force $appPlugins | Out-Null
+    if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+    Copy-Item $BundleRoot $dest -Recurse -Force
+    Write-Host ""
+    Write-Host "Deployed to: $dest"
+    Write-Host "Restart AutoCAD to load the plugin."
+}

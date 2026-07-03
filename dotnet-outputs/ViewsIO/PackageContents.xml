@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ApplicationPackage SchemaVersion="1.0"
+  AutodeskProduct="AutoCAD"
+  ProductType="Application"
+  AppVersion="1.0.0"
+  ProductCode="{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+  Name="ViewsIO"
+  Description="Export and import named views to/from JSON"
+  Author="Migrated from viewsIO.lsp by Jimmy Bergmark">
+  <CompanyDetails Name="Your Company" Url="https://yourcompany.com" Email="support@yourcompany.com" />
+  <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R26.0" SeriesMax="R26.0" />
+  <Components Description="ViewsIO">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R26.0" SeriesMax="R26.0" SupportPath="./Contents/Win64" />
+    <ComponentEntry
+      AppName="ViewsIO"
+      AppType=".NET"
+      Version="1.0.0"
+      ModuleName="./Contents/Win64/ViewsIO.dll"
+      LoadOnAutoCADStartup="True">
+      <Commands GroupName="ViewsIO_Commands">
+        <Command Local="EXPORTVIEWS"  Global="EXPORTVIEWS" />
+        <Command Local="IMPORTVIEWS"  Global="IMPORTVIEWS" />
+        <Command Local="-EXPORTVIEWS" Global="-EXPORTVIEWS" />
+        <Command Local="-IMPORTVIEWS" Global="-IMPORTVIEWS" />
+      </Commands>
+    </ComponentEntry>
+  </Components>
+</ApplicationPackage>

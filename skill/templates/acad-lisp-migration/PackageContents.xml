@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ApplicationPackage SchemaVersion="1.0"
+  AutodeskProduct="AutoCAD"
+  ProductType="Application"
+  AppVersion="1.0.0"
+  ProductCode="{00000000-0000-0000-0000-000000000000}"
+  Name="MyPlugin"
+  Description="MyPlugin AutoCAD Plugin"
+  Author="Your Name">
+  <CompanyDetails Name="Your Company" Url="https://yourcompany.com" Email="support@yourcompany.com" />
+  <!--#if (acad2025)-->
+  <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R25.0" SeriesMax="R25.0" />
+  <!--#elseif (acad2026)-->
+  <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R25.1" SeriesMax="R25.1" />
+  <!--#else-->
+  <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R26.0" SeriesMax="R26.0" />
+  <!--#endif-->
+  <Components Description="MyPlugin">
+    <!--#if (acad2025)-->
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R25.0" SeriesMax="R25.0" SupportPath="./Contents/Win64" />
+    <!--#elseif (acad2026)-->
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R25.1" SeriesMax="R25.1" SupportPath="./Contents/Win64" />
+    <!--#else-->
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R26.0" SeriesMax="R26.0" SupportPath="./Contents/Win64" />
+    <!--#endif-->
+    <ComponentEntry
+      AppName="MyPlugin"
+      AppType=".NET"
+      Version="1.0.0"
+      ModuleName="./Contents/Win64/MyPlugin.dll"
+      LoadOnAutoCADStartup="True">
+      <Commands GroupName="MyPlugin_Commands">
+        <!-- TODO: one <Command> per [CommandMethod] in Commands.cs -->
+        <Command Local="MYPLUGIN_CMD" Global="MYPLUGIN_CMD" />
+      </Commands>
+    </ComponentEntry>
+  </Components>
+</ApplicationPackage>

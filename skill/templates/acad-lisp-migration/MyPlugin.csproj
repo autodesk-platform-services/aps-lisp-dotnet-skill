@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <!--#if (net8target)-->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <!--#else-->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <!--#endif-->
+    <PlatformTarget>x64</PlatformTarget>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <!--#if (acad2025)-->
+    <PackageReference Include="AutoCAD.NET" Version="25.0.0" ExcludeAssets="runtime" />
+    <!--#elseif (acad2026)-->
+    <PackageReference Include="AutoCAD.NET" Version="25.1.0" ExcludeAssets="runtime" />
+    <!--#else-->
+    <PackageReference Include="AutoCAD.NET" Version="26.0.0" ExcludeAssets="runtime" />
+    <!--#endif-->
+  </ItemGroup>
+</Project>

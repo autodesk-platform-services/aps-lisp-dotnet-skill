@@ -1,0 +1,2 @@
+claude --resume 4ea03c7d-6a6b-4045-bc4b-16d6b7650636
+build the dotnet new template
