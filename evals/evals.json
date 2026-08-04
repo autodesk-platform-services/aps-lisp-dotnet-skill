@@ -1,0 +1,44 @@
+{
+  "skill_name": "lisp-to-dotnet",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "convert evals/files/gpmain.lsp to a Design Automation plugin",
+      "expected_output": "A single DA-only .NET plugin project (AutoCAD.NET.Core only, no AutoCAD.NET) with one [CommandMethod] per LISP command. The interactive getpoint/getdist input from gp:getPointInput becomes a parameterized record read from params.json — no ed.GetPoint calls anywhere. vla-addLightweightPolyline maps to a typed Polyline. gp:getDialogInput's (alert \"...\") stub is correctly NOT flagged as DCL (no load_dialog/new_dialog present). Unit tests for pure math (Degrees->Radians, polar/angle/distance derivation), NUnit integration test confirming the polyline outline is created with 4 vertices, closed, correct width. PackageContents.xml and a built bundle.",
+      "files": ["evals/files/gpmain.lsp"],
+      "assertions": [
+        "No AutoCAD.NET package reference anywhere in the generated .csproj files — only AutoCAD.NET.Core",
+        "No ed.GetPoint/ed.GetDistance/ed.GetString calls in Commands.cs — all interactive input is read from a deserialized params/input record",
+        "A Models/*Input.cs (or equivalently named) record exists capturing the point/distance inputs gp:getPointInput originally prompted for",
+        "gp:getDialogInput's (alert ...) stub is not misidentified as a DCL dialog and does not trigger the DCL guardrail refusal",
+        "At least one xUnit test covers Degrees->Radians or the polar/angle/distance math with no AutoCAD types (Point3d etc.) in the test file",
+        "dotnet build succeeds with 0 errors"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I need HATCHB.lsp migrated to .NET for our Design Automation pipeline, it recreates hatch boundaries",
+      "expected_output": "A DA-only plugin translating the dense VLA entity-creation logic (vla-AddLine, vla-AddCircle, vla-AddArc, vla-AddEllipse, vla-addLightweightPolyline, vla-setBulge, vla-put-closed/layer) into typed .NET entity creation across all edge types (line, circular arc, elliptic arc, spline, polyline). The interactive (ssget '((0 . \"HATCH\"))) selection becomes a parameterized input (e.g. process-all-hatches or a handle list from params.json), not an interactive prompt. The (command \"._ucs\" ...) / (command \"._UNDO\" ...) / (command \"._pedit\" ... \"_J\" ...) sequences are flagged as out-of-scope v2 TODOs rather than silently migrated or silently dropped.",
+      "files": ["evals/files/HATCHB.lsp"],
+      "assertions": [
+        "Generated code contains no interactive ssget call — hatch selection comes from a parameter (all hatches, or a handle/ObjectId list from params.json)",
+        "vla-AddLine/vla-AddCircle/vla-AddArc/vla-AddEllipse/vla-addLightweightPolyline each have a corresponding typed .NET entity-creation call (Line, Circle, Arc, Ellipse, Polyline) in the generated Helpers code, not left as unmigrated TODOs",
+        "The (command \"._pedit\" ... \"_J\" ...) polyline-join sequence and (command \"._ucs\"/\"._UNDO\" ...) bookkeeping are explicitly flagged as out-of-scope v2 TODO comments, not silently translated into C# command-macro calls or silently omitted without a comment",
+        "No AutoCAD.NET package reference — AutoCAD.NET.Core only",
+        "The area-computation vlax-curve-getArea / vl-catch-all-apply pattern maps to a try/catch (or equivalent) around a typed area computation, not left as a raw COM call"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "migrate evals/files/mstxt.lsp to .NET",
+      "expected_output": "The skill detects real DCL usage (load_dialog \"MSTXT.DCL\", new_dialog \"DDEDIM\", set_tile, action_tile, mode_tile) before generating any code, and responds with the DCL Guardrail refusal message rather than attempting to migrate the dialog logic. No C# project is scaffolded unless the user explicitly replies to proceed with non-dialog code only.",
+      "files": ["evals/files/mstxt.lsp"],
+      "assertions": [
+        "The response identifies DCL/dialog usage (load_dialog and/or new_dialog) before any code generation or project scaffolding is attempted",
+        "The response explicitly states DCL migration is out of scope for v1 and does not silently generate a broken or stubbed dialog replacement",
+        "No dotnet new / project scaffold command is run or suggested as already-done in this response",
+        "The response offers a path forward (migrate non-dialog code only, or wait for v2) rather than simply stopping with no guidance"
+      ]
+    }
+  ]
+}
