@@ -17,13 +17,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <!-- AcCoreMgd.dll only — Database, Geometry, Runtime, Editor. Safe in accoreconsole  -->
+    <!-- and in the real DA engine. Design Automation is this skill's only target, so     -->
+    <!-- AutoCAD.NET (full package, AcMgd.dll desktop UI layer) is never referenced here — -->
+    <!-- it crashes both accoreconsole and DA with 0xC0000005. See SKILL.md's Design       -->
+    <!-- Automation Guardrail for the full rationale.                                     -->
     <!--#if (acad2025)-->
-    <PackageReference Include="AutoCAD.NET" Version="25.0.0" ExcludeAssets="runtime" />
+    <PackageReference Include="AutoCAD.NET.Core" Version="25.0.0" ExcludeAssets="runtime" />
     <!--#elseif (acad2026)-->
-    <PackageReference Include="AutoCAD.NET" Version="25.1.0" ExcludeAssets="runtime" />
+    <PackageReference Include="AutoCAD.NET.Core" Version="25.1.0" ExcludeAssets="runtime" />
     <!--#else-->
-    <PackageReference Include="AutoCAD.NET" Version="26.0.0" ExcludeAssets="runtime" />
+    <PackageReference Include="AutoCAD.NET.Core" Version="26.0.0" ExcludeAssets="runtime" />
     <!--#endif-->
   </ItemGroup>
 </Project>

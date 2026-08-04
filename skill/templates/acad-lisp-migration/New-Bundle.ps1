@@ -1,6 +1,8 @@
 #Requires -Version 7
-# Creates the MyPlugin.bundle folder structure for AutoCAD Autoloader deployment.
-# Bundle layout per Autodesk Autoloader spec:
+# Creates the MyPlugin.bundle folder structure per the Autodesk Autoloader spec.
+# This is the same bundle folder Deploy-And-Test-DA.ps1 (in da/) zips and uploads
+# as the APS AppBundle — running this script is a prerequisite for DA deployment,
+# not a separate desktop-only step.
 #   MyPlugin.bundle/
 #     PackageContents.xml
 #     Contents/Win64/
@@ -9,7 +11,7 @@
 #
 # Usage:
 #   ./New-Bundle.ps1
-#   ./New-Bundle.ps1 -Config Release -Deploy
+#   ./New-Bundle.ps1 -Config Release -Deploy   # also local desktop sanity-check load
 param(
     [string] $Config     = "Debug",
 #if (net8target)
@@ -18,7 +20,10 @@ param(
     [string] $Tfm        = "net10.0-windows",
 #endif
     [string] $BundleRoot = "$PSScriptRoot\MyPlugin.bundle",
-    [switch] $Deploy     # copy bundle to %APPDATA%\Autodesk\ApplicationPlugins
+    [switch] $Deploy     # copy bundle to %APPDATA%\Autodesk\ApplicationPlugins for a
+                         # local NETLOAD sanity check — confirms the assembly loads and
+                         # runs cleanly before submitting a real DA WorkItem; not itself
+                         # the DA deployment path (see da/Deploy-And-Test-DA.ps1)
 )
 
 $ErrorActionPreference = "Stop"

@@ -12,9 +12,11 @@ pwsh Tests/Integration/RunIntegrationTests.ps1 -OpenReport
 ```
 
 ## AutoCAD .NET package rule
-- `AutoCAD.NET` — main plugin (desktop interactive, includes AcMgd.dll).
-- `AutoCAD.NET.Core` — integration tests only (AcCoreMgd.dll, headless-safe).
-- Never reference `AcMgd.dll` in test projects — crashes accoreconsole with 0xC0000005.
+- `AutoCAD.NET.Core` everywhere — main plugin and test projects alike (`AcCoreMgd.dll`, headless-safe).
+- Never reference `AutoCAD.NET`/`AcMgd.dll` anywhere in this project — crashes accoreconsole and the real DA engine alike with `0xC0000005`. Design Automation is this project's only target; there is no desktop build to justify it.
+
+## Design Automation input pattern
+Every command's inputs come from `params.json`, never from an interactive prompt or dialog (`getpoint`/`getstring`/`getfiled` in the original LISP all become fields on a `Models/<CommandName>Input.cs` record). A DA Activity has no display and no live console — code that relies on interactive input hangs or fails in the cloud instead of erroring at build time.
 
 ## Test pattern (coreconsolerunner)
 Commands WRITE (document lock held automatically via `[CommandMethod]`).

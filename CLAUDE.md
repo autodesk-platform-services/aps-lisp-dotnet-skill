@@ -29,14 +29,24 @@ lisps/          ← research corpus only — 64 real-world .lsp samples
                    from jtbworld.com. NOT deployed. Used for pattern
                    discovery and skill testing.
 
+evals/          ← eval suite for the SKILL ITSELF (evals.json + fixture
+                   .lsp files + Run-Eval.ps1 manual-verification harness).
+                   Validates skill quality/regressions — not something a
+                   customer running a migration ever touches. Kept at
+                   repo root, not inside skill/, for the same reason as
+                   dotnet-outputs/ and lisps/: the deployable unit stays
+                   small and customer-facing only.
+
 CLAUDE.md       ← this file — project context, NOT deployed
 ```
 
 All learning from worked examples is captured directly in `SKILL.md` (the Discovery Table procedure and pattern mapping reference) — `dotnet-outputs/` exists for human verification, not as something the skill reads from at migration time.
 
+**Branches:** `master`/`au-2026-da-only` — Design Automation is the skill's only target (see Scope Boundaries below); no desktop/interactive output is generated. `desktop` — a preserved snapshot of the prior multi-target (desktop + DA + both) skill, kept in case that scope is needed again later. `dotnet-outputs/GardenPath` predates the DA-only pivot and still reflects the old desktop-oriented shape — treat it as historical, not as current expected output.
+
 ## What This Is
 
-A Claude Code skill (`skill/SKILL.md`) that converts AutoLISP (`.lsp`) routines into production-ready AutoCAD .NET C# plugins. The skill itself is pure documentation — no build system exists here. The **outputs** it generates are C# projects.
+A Claude Code skill (`skill/SKILL.md`) that converts AutoLISP (`.lsp`) routines into a production-ready AutoCAD .NET C# plugin for **Design Automation**. The skill itself is pure documentation — no build system exists here. The **outputs** it generates are C# projects, one per migration, DA-only.
 
 ## Invoking the Skill
 
@@ -50,10 +60,10 @@ Example: `/lisp-to-dotnet lisps/viewsIO.lsp convert to .NET with unit tests`
 
 1. Resolve environment paths + AutoCAD version (Step 0 in SKILL.md)
 2. Read the `.lsp` file, build the Discovery Table (Step 1) — this is fully generic, not tied to any fixed entity type or command shape
-3. User runs `dotnet new acad-lisp -n <ProjectName> --autocad-version <year>` to scaffold (Step 2)
-4. Claude fills in the generated stubs — `Commands.cs`, `Helpers/`, `Models/`, `TestData.cs`, `TestSetupCommands.cs` — derived from the Discovery Table (Steps 3–4)
+3. User runs `dotnet new acad-lisp -n <ProjectName> --AutoCADVersion <year>` to scaffold (Step 2)
+4. Claude fills in the generated stubs — `Commands.cs`, `Helpers/`, `Models/`, `TestData.cs`, `TestSetupCommands.cs` — derived from the Discovery Table (Steps 3–4). Every interactive LISP input (`getpoint`/`getstring`/`getfiled`/etc.) becomes a field on a parameterized `<CommandName>Input` record read from `params.json` — never an interactive prompt.
 5. User runs `RunIntegrationTests.ps1` (accoreconsole) and `dotnet test` (xUnit) to verify
-6. `New-Bundle.ps1` packages the AppStore/DA bundle (Step 5)
+6. `New-Bundle.ps1` packages the DA bundle (Step 5); `da/Deploy-And-Test-DA.ps1` deploys it to a real APS Design Automation activity and submits a test WorkItem
 
 File structure and test count are **derived per-migration** from what the LISP actually contains — not a fixed template. See SKILL.md Step 3 for the derivation rules.
 
@@ -61,13 +71,12 @@ File structure and test count are **derived per-migration** from what the LISP a
 
 - TFM/NuGet version derived from AutoCAD year (2025→net8.0-windows/25.0.0, 2026→net8.0-windows/25.1.0, 2027→net10.0-windows/26.0.0)
 - `PlatformTarget x64`, `GenerateTargetFrameworkAttribute false`
-- Main plugin: `AutoCAD.NET` with `ExcludeAssets="runtime"`
-- Integration tests: `AutoCAD.NET.Core` (never `AutoCAD.NET` — `AcMgd.dll` crashes accoreconsole)
+- **`AutoCAD.NET.Core` everywhere — main plugin and test projects alike.** Never `AutoCAD.NET` (`AcMgd.dll` crashes both `accoreconsole` and the real DA engine with `0xC0000005`). Design Automation is this skill's only target; there is no desktop project to justify the full package.
 - Unit tests: `xUnit` + `AutoCAD.NET.Model`
 
 ## Scope Boundaries
 
-**In scope (v1):** `defun C:*` commands, `ssget`/`ssname`/`sslength`, `entget`/`entmod`/`entdel`/`entmake`, DXF group code `assoc`, VLA-Object/COM interop, file I/O, string/math utilities, unit tests, AppStore bundle packaging.
+**In scope (v1):** `defun C:*` commands, `ssget`/`ssname`/`sslength`, `entget`/`entmod`/`entdel`/`entmake`, DXF group code `assoc`, VLA-Object/COM interop, file I/O, string/math utilities, unit tests, Design Automation bundle + activity deployment.
 
 **Out of scope (v2):** DCL dialogs (flag as TODO, WPF/Palette replacement needs design session), `(command ...)` macro sequences, reactor/event-driven code.
 
@@ -87,10 +96,6 @@ File structure and test count are **derived per-migration** from what the LISP a
 - Database/entity operations: NUnit + NUnitLite self-hosted in accoreconsole (coreconsolerunner pattern) — commands WRITE (doc lock automatic), NUnit threads only READ from `TestData` statics. No `LockDocument`, no `OpenCloseTransaction`.
 - ExtentReports HTML output for the integration test run, viewable in VS Code Simple Browser
 
-## AU 2026 Demo Targets
+## Worked Examples
 
-1. `ExportHatchToJSON.lsp` → `HatchExporter.cs` — ssget, entget, GetLoopAt, JSON output
-2. `TextExtract.lsp` → `TextExtractor.cs` — text entity ops, string handling
-3. `APS_ExportHatchToJSON.lsp` → `ApsHatchExporter.cs` — Design Automation / headless (no `Editor` dependency)
-
-Worked examples validating the skill so far: `dotnet-outputs/GardenPath` (full build + accoreconsole run, passing) and `dotnet-outputs/ViewsIO` (entget/entmod/entmake dry run).
+`dotnet-outputs/GardenPath` and `dotnet-outputs/ViewsIO` predate the Design-Automation-only pivot and still reflect the old desktop-oriented shape — treat as historical validation, not current expected output. `skill/evals/files/` holds the current fixtures used for skill evaluation (`gpmain.lsp`, `HATCHB.lsp`, `mstxt.lsp`) — see `skill/evals/evals.json`.

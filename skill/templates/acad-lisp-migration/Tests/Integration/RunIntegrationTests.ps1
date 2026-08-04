@@ -2,19 +2,25 @@
 # Builds MyPlugin.IntegrationTests and runs it in accoreconsole.
 # All paths are explicit parameters — nothing is inferred at runtime.
 #
+# The -Accore default below is the standard Autodesk installer location. If this
+# customer's AutoCAD is installed elsewhere (confirmed via Step 0's "AutoCAD install
+# folder?" question), Claude must replace this default with the actual resolved path
+# before handing this file to the user — never leave a placeholder that only happens
+# to work on one specific machine.
+#
 # Usage:
 #   ./RunIntegrationTests.ps1
 #   ./RunIntegrationTests.ps1 -Config Release -OpenReport
 param(
     [string] $Config     = "Debug",
 #if (acad2025)
-    [string] $Accore     = "D:\ACAD\AutoCAD 2025\accoreconsole.exe",
+    [string] $Accore     = "C:\Program Files\Autodesk\AutoCAD 2025\accoreconsole.exe",
     [string] $Tfm        = "net8.0-windows",
 #elseif (acad2026)
-    [string] $Accore     = "D:\ACAD\AutoCAD 2026\accoreconsole.exe",
+    [string] $Accore     = "C:\Program Files\Autodesk\AutoCAD 2026\accoreconsole.exe",
     [string] $Tfm        = "net8.0-windows",
 #else
-    [string] $Accore     = "D:\ACAD\AutoCAD 2027\accoreconsole.exe",
+    [string] $Accore     = "C:\Program Files\Autodesk\AutoCAD 2027\accoreconsole.exe",
     [string] $Tfm        = "net10.0-windows",
 #endif
     [switch] $OpenReport          # open TestReport.html in VS Code after run

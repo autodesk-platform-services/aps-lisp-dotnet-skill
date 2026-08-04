@@ -13,3 +13,15 @@ InternalTrace.*.log
 
 # dotnet new template install cache (if installed locally for testing)
 *.nupkg
+
+# Real credentials — never commit. .env.example (the precanned template) IS tracked.
+.env
+da/.env
+
+# Internal-only, not for the public repo/submission
+CHALLENGE-SUBMISSION.md
+
+# Regenerable DA deploy artifacts — keep worked examples to source+config only
+dotnet-outputs/**/da/*.dwg
+dotnet-outputs/**/da/*.zip
+dotnet-outputs/**/da/workitem-results/

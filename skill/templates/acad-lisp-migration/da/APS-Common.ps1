@@ -8,6 +8,23 @@ $DA_BASE  = "https://developer.api.autodesk.com/da/us-east/v3"
 $OSS_BASE = "https://developer.api.autodesk.com/oss/v2"
 $AUTH_URL = "https://developer.api.autodesk.com/authentication/v2/token"
 
+# Load .env (copied from .env.example, gitignored) into the process environment,
+# if present, before anything else reads $env:APS_*. Real credentials never pass
+# through Claude — the developer fills in .env themselves on their own machine.
+function Import-DotEnv {
+    param([string] $Path = "$PSScriptRoot\.env")
+    if (-not (Test-Path $Path)) { return }
+    Get-Content $Path | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -eq "" -or $line.StartsWith("#")) { return }
+        $parts = $line.Split("=", 2)
+        if ($parts.Count -eq 2 -and $parts[1].Trim() -ne "") {
+            [Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1].Trim(), "Process")
+        }
+    }
+}
+Import-DotEnv
+
 # Auth
 
 function Get-APSToken {
@@ -40,6 +57,43 @@ function Set-DANickname($token, $nickname) {
     } catch {
         Write-Host "  Nickname PATCH failed: $_" -ForegroundColor Yellow
     }
+}
+
+# APS lets you set a forgeapps nickname exactly once — PATCHing it again once the app
+# already owns bundles/activities fails with "already has resources", and everything
+# downstream (bundle/activity/workitem qualification) must use whatever nickname is
+# ACTUALLY registered, not whatever was typed at the prompt. Always call this instead
+# of Set-DANickname directly; it only PATCHes when no nickname exists yet, and always
+# returns the nickname callers should actually use.
+function Resolve-DANickname($token, $requestedNickname) {
+    $current = Get-DANickname $token
+    # GET /forgeapps/me returns { "id": "<value>" } — but when no custom nickname has ever
+    # been registered, <value> defaults to your raw APS_CLIENT_ID, not blank/null. Comparing
+    # against $env:APS_CLIENT_ID (not just truthiness) is the only way to tell "has a real
+    # nickname" apart from "still on the default identity".
+    $hasRealNickname = $current.id -and ($current.id -ne $env:APS_CLIENT_ID)
+    if ($hasRealNickname) {
+        Write-Host "  Existing nickname: '$($current.id)'" -ForegroundColor Cyan
+        if ($current.id -ne $requestedNickname) {
+            Write-Host "  (requested '$requestedNickname' ignored — already registered)" -ForegroundColor Yellow
+        }
+        return $current.id
+    }
+    if (-not $requestedNickname) {
+        throw "No forgeapps nickname is registered yet, and none was provided. Pass -Owner <nickname>."
+    }
+    Set-DANickname $token $requestedNickname
+    return $requestedNickname
+}
+
+# DELETE /forgeapps/me — wipes EVERY bundle, activity, and the nickname itself for this
+# client. Irreversible. Only call this from a script the user runs deliberately (e.g.
+# Reset-APSApp.ps1), never as part of the normal deploy/test flow — it is the "start over
+# from a clean slate" escape hatch when resource state has gotten confused across runs,
+# not a routine step.
+function Remove-DAAllResources($token) {
+    Invoke-RestMethod -Uri "$DA_BASE/forgeapps/me" -Method DELETE `
+        -Headers @{ Authorization = "Bearer $token" } | Out-Null
 }
 
 # DA helpers
@@ -218,7 +272,8 @@ function Upload-ToOSS($token, $bucketKey, $objectKey, $filePath) {
         -Headers @{ Authorization = "Bearer $token"; "Content-Type" = "application/json" } `
         -Body (@{ uploadKey = $uploadKey } | ConvertTo-Json)
 
-    Write-Host "  Uploaded '$objectKey' ($([math]::Round($fileSize/1KB)) KB)" -ForegroundColor Green
+    $sizeDisplay = if ($fileSize -lt 1KB) { "$fileSize B" } else { "$([math]::Round($fileSize/1KB, 1)) KB" }
+    Write-Host "  Uploaded '$objectKey' ($sizeDisplay)" -ForegroundColor Green
     return $r.objectId
 }
 
@@ -234,7 +289,9 @@ function Get-OSSSignedUrl($token, $bucketKey, $objectKey, [ValidateSet("read","w
 
 function Download-FromUrl($url, $destPath) {
     Invoke-WebRequest -Uri $url -OutFile $destPath -UseBasicParsing
-    Write-Host "  Downloaded -> $destPath ($([math]::Round((Get-Item $destPath).Length/1KB)) KB)" -ForegroundColor Green
+    $downloadedSize = (Get-Item $destPath).Length
+    $sizeDisplay = if ($downloadedSize -lt 1KB) { "$downloadedSize B" } else { "$([math]::Round($downloadedSize/1KB, 1)) KB" }
+    Write-Host "  Downloaded -> $destPath ($sizeDisplay)" -ForegroundColor Green
 }
 
 # WorkItem
@@ -263,6 +320,25 @@ function Wait-WorkItem($token, $workItemId, [int]$timeoutSec = 300) {
     } else {
         Write-Host "  WorkItem FAILED: $($r.status)" -ForegroundColor Red
         if ($r.reportUrl) { Write-Host "  Report: $($r.reportUrl)" -ForegroundColor Yellow }
+    }
+
+    # DA's own stats breakdown — queue/download/processing/upload phases, not just our poll
+    # interval. Useful for understanding where time (and DA cloud-credit cost) actually went,
+    # instead of hand-timing "start of script" to "file appeared."
+    if ($r.stats) {
+        $s = $r.stats
+        try {
+            $queued  = [datetime]$s.timeQueued
+            $dlStart = [datetime]$s.timeDownloadStarted
+            $ixStart = [datetime]$s.timeInstructionsStarted
+            $ixEnd   = [datetime]$s.timeInstructionsEnded
+            $ulEnd   = [datetime]$s.timeUploadEnded
+            $finished= [datetime]$s.timeFinished
+            Write-Host "  Stats: queued->download $([math]::Round(($dlStart-$queued).TotalSeconds,1))s | download->processing $([math]::Round(($ixStart-$dlStart).TotalSeconds,1))s | processing $([math]::Round(($ixEnd-$ixStart).TotalSeconds,1))s | upload $([math]::Round(($ulEnd-$ixEnd).TotalSeconds,1))s | total $([math]::Round(($finished-$queued).TotalSeconds,1))s" -ForegroundColor DarkGray
+        } catch { }
+        if ($s.bytesDownloaded -or $s.bytesUploaded) {
+            Write-Host "  Data: downloaded $($s.bytesDownloaded) B, uploaded $($s.bytesUploaded) B" -ForegroundColor DarkGray
+        }
     }
     return $r
 }

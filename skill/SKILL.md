@@ -1,14 +1,16 @@
 ---
 name: lisp-to-dotnet
-description: "AutoLISP to AutoCAD .NET migration skill. Analyzes .lsp files, maps Lisp patterns to .NET equivalents, generates C# plugin code with unit tests, AppStore bundle packaging, and Design Automation (DA) deployment. AutoLISP does not run in Design Automation — this skill is the migration path."
-argument-hint: "Path to .lsp file and target (e.g., 'convert gpmain.lsp to .NET for AppStore' or 'convert ExportHatch.lsp to Design Automation')"
+description: "AutoLISP to AutoCAD .NET migration skill for Design Automation (DA). Analyzes .lsp files, maps LISP patterns to .NET equivalents, generates a single DA-ready C# plugin — every command becomes a parameterized, non-interactive entry point — with unit tests, accoreconsole integration tests, and a DA-deployable bundle. AutoLISP does not run in Design Automation; this skill is the migration path."
+argument-hint: "Path to .lsp file (e.g., 'convert gpmain.lsp to a Design Automation plugin')"
+disable-model-invocation: false
+user-invocable: true
 ---
 
-# AutoLISP → AutoCAD .NET Migration Skill
+# AutoLISP → AutoCAD .NET Migration Skill (Design Automation)
 
-Converts AutoLISP routines into production-ready AutoCAD .NET C# plugins.
+Converts AutoLISP routines into a production-ready AutoCAD .NET C# plugin for **Design Automation**. This is the sole target — there is no desktop/interactive output. Every migrated command is a parameterized, non-interactive entry point, never a dialog or a command-line prompt.
 
-**Core motivation:** Visual LISP (the COM/ActiveX API — `vlax-*`, `vla-*`, `vlax-invoke-method`) does not work in Design Automation. The COM runtime is absent in headless accoreconsole. Basic AutoLISP (`entget`, `ssget`, `entmod`) does run in DA, but most real-world LISP plugins use Visual LISP COM calls and are therefore blocked. Migration to .NET typed API is the only path to cloud automation for those plugins. This skill removes the C# syntax barrier for LISP developers.
+**Core motivation:** Visual LISP (the COM/ActiveX API — `vlax-*`, `vla-*`, `vlax-invoke-method`) does not work in Design Automation. The COM runtime is absent in headless accoreconsole. Basic AutoLISP (`entget`, `ssget`, `entmod`) does run in DA, but most real-world LISP plugins use Visual LISP COM calls and are therefore blocked. Migration to .NET typed API is the only path to cloud automation for those plugins. This skill removes the C# syntax barrier for LISP developers making that jump — and removes the ambiguity of trying to support both desktop and DA from one project: DA-only keeps every generated command to a single, consistent shape.
 
 ---
 
@@ -48,24 +50,14 @@ Infer `serial`, `nuget_version`, `da_engine`, and `tfm` from the AutoCAD year:
 
 - **serial** → `SeriesMin`/`SeriesMax` in `PackageContents.xml`
 - **da_engine** → `engine` field in APS Design Automation activity JSON
-- **nuget_version** → `AutoCAD.NET` version in `.csproj`
+- **nuget_version** → `AutoCAD.NET.Core` version in `.csproj` (the only package this skill ever references — see Design Automation Guardrail)
 - **tfm** → `TargetFramework` in `.csproj`
 
 If the user has already provided any path in the argument, accept it and only ask for the missing ones.
 
-## Conversion Targets
+## Conversion Target
 
-Always ask or infer which target the user needs:
-
-| Target | Flag | Output | Notes |
-|--------|------|--------|-------|
-| Desktop + AppStore | `--target desktop` | `.bundle` for `%APPDATA%\Autodesk\ApplicationPlugins` | Full editor access, UI allowed |
-| Design Automation | `--target da` | `.bundle` for DA activity via APS | No editor, no UI, headless only |
-| Both | `--target both` | Two bundles, shared core logic | Recommended for most migrations |
-
-Default to `--target both` unless user specifies otherwise.
-
-**If the target includes DA, see the Design Automation Guardrail below before finalizing** — no interactive input surface (dialogs or command-line prompts) belongs on a DA-facing entry point.
+There is exactly one target: **Design Automation.** No `--target` flag, no per-migration choice — every migration produces one DA-ready plugin project and one DA bundle. See the Design Automation Guardrail below: no interactive input surface (dialogs or command-line prompts) belongs anywhere in the generated code, since there's no desktop counterpart to defer them to.
 
 ## Execution Mode — Ask Once, Never Re-Ask
 
@@ -113,27 +105,51 @@ Also check for a `.dcl` file with the same base name in the same folder.
 
 If the user explicitly says "migrate non-dialog code only", proceed but replace every DCL call with a `// TODO v2` stub — never generate DCL-equivalent C# for dialog code.
 
-## Design Automation Guardrail — Verify Before Finalizing a DA Target
+## Design Automation Guardrail — Applies to Every Command, Always
 
-**If the target is `da` or `both`, do not consider the migration done until every command reachable from the DA bundle has passed this checklist.** A DA Activity has no display, no message pump, and no live console — a command that silently relies on any interactive input will not error cleanly at build time; it will hang or fail inside an Autodesk-hosted cloud worker, which is far harder to debug than a desktop crash. Treat this with the same seriousness as the DCL Guardrail, not as a footnote.
+**Since DA is the only target, this checklist applies to every `[CommandMethod]` in every migration — there is no separate desktop path to defer an interactive command to.** A DA Activity has no display, no message pump, and no live console — a command that silently relies on any interactive input will not error cleanly at build time; it will hang or fail inside an Autodesk-hosted cloud worker, which is far harder to debug than a desktop crash. Treat this with the same seriousness as the DCL Guardrail, not as a footnote.
 
-For every `[CommandMethod]` intended for the DA activity, check for and eliminate:
+For every `[CommandMethod]`, check for and eliminate:
 
 - `getfiled` → `OpenFileDialog`/`SaveFileDialog` — any GUI dialog. **Zero tolerance.**
-- `getstring`/`getkword`/`getpoint`/`getdist`/`getreal`/`getint`/`getangle` → `ed.GetString`/`ed.GetKeywords`/`ed.GetPoint`/etc. Even though these *can* be driven via a `.scr` with pre-supplied answers (used for `accoreconsole` testing elsewhere in this skill), a real DA Activity does not feed a script of typed answers — its inputs are pre-mapped parameter files. Any reliance on these in the DA-facing path is a defect, not a testing inconvenience.
+- `getstring`/`getkword`/`getpoint`/`getdist`/`getreal`/`getint`/`getangle` → `ed.GetString`/`ed.GetKeywords`/`ed.GetPoint`/etc. Even though these *can* be driven via a `.scr` with pre-supplied answers (used for `accoreconsole` testing elsewhere in this skill), a real DA Activity does not feed a script of typed answers — its inputs are pre-mapped parameter files. Any reliance on these is a defect, not a testing inconvenience.
 - Anything requiring on-screen entity selection (`ssget` with no filter, "select objects:" prompts) with no non-interactive fallback (e.g. "select all of type X" is fine — typed/filtered `ssget` patterns translate directly to `OfType<T>()`; open-ended interactive pick prompts do not).
 
-**Remediation:** generate a separate, purely parameterized entry point for the DA activity — inputs as method arguments or read from a fixed, DA-parameter-mapped file location, zero prompts of any kind — reusing the same Helpers/service logic already split out from the interactive desktop `Commands.cs` methods (Step 3's Helpers/ derivation rule exists partly for this reason). The interactive desktop commands (GUI and CLI-prompt variants alike) stay in the desktop bundle only.
+**Remediation — every one of these becomes a parameter, never gets dropped.** Whatever the original LISP asked the user for interactively (a point, a distance, a filename, a keyword choice), the migrated command reads the same value as a method argument or from a fixed, DA-parameter-mapped JSON file (see `GardenPath`'s `GPathDaInput`/`params.json` pattern for the template). Nothing about the original command's *capability* is lost — only the mechanism for supplying its inputs changes, from "ask interactively" to "read from parameters." Reuse the same Helpers/service logic split out from the parameter-reading `Commands.cs` methods (Step 3's Helpers/ derivation rule exists partly for this reason).
 
-**If a command's behavior is fundamentally interactive** (e.g. it exists specifically to let a human pick geometry on screen, with no sensible non-interactive equivalent), do not silently ship a broken DA version of it. Say so explicitly: flag it as desktop-only and exclude it from the DA bundle, rather than generating a DA entry point that will hang in production.
+**Package rule — always `AutoCAD.NET.Core`, one project, no exceptions.** The DA execution engine is architecturally the same headless core as `accoreconsole` — [`AutoCAD.NET`](https://www.nuget.org/packages/AutoCAD.NET) (full package, includes `AcMgd.dll`, the desktop UI layer) crashes it the same way it crashes `accoreconsole` with `0xC0000005`. Since there is no desktop target to justify referencing `AutoCAD.NET`, this skill never generates a project that does — [`AutoCAD.NET.Core`](https://www.nuget.org/packages/AutoCAD.NET.Core) is the only package reference for the main plugin project, matching the test projects (Step 4). One project, one package, no split.
 
-**Package rule — this applies to the shipped plugin assembly itself, not just test projects.** The same `AcMgd.dll`-crashes-headless fact that governs integration test packages (see Step 4) governs the real DA bundle too, because the DA execution engine is architecturally the same headless core as `accoreconsole`:
-- **Desktop bundle** → `AutoCAD.NET` (full package, `AcMgd.dll` included — fine, real desktop AutoCAD has a UI).
-- **DA bundle** → [`AutoCAD.NET.Core`](https://www.nuget.org/packages/AutoCAD.NET.Core) (no `AcMgd.dll` — required, or the DA activity crashes the same way `accoreconsole` does with `AutoCAD.NET`).
+**Deploying and testing against real APS Design Automation:** the `dotnet new acad-lisp` scaffold includes `da/APS-Common.ps1` (generic REST helpers — auth, AppBundle/Activity/WorkItem lifecycle, OSS upload/download — no per-migration edits needed), `da/Deploy-And-Test-DA.ps1` (deploys the bundle + activity, submits a test WorkItem against the DA entry point, downloads the result; reads its shape from `da/activity.json`/`da/params.example.json`), and `da/Reset-APSApp.ps1` (deliberate escape hatch — see below). Claude still authors `da/activity.json` and `da/params.example.json` per migration in Step 5 — they contain the actual DA command name and parameter fields, which are migration-specific and can't be templated generically. Requires `$env:APS_CLIENT_ID`/`$env:APS_CLIENT_SECRET` (an APS app with Design Automation + Data Management scopes) and a real seed `.dwg` to submit.
 
-**This means a single `.csproj` cannot serve both targets for `--target both`.** A project referencing `AutoCAD.NET` would crash in the real DA engine; a project referencing only `AutoCAD.NET.Core` can't use desktop-only APIs (MDI window management, WPF, palettes) if any interactive desktop command needs them. Until this is resolved with a proper two-project split in the `dotnet new` template (open item — not yet built), treat `--target both` as **two separate plugin projects** sharing the same `Helpers`/`Models` logic (which only need `Database`/`Geometry`/`Runtime` types present in both packages): one referencing `AutoCAD.NET` exposing the interactive desktop commands, one referencing `AutoCAD.NET.Core` exposing only the DA-safe parameterized entry points from the remediation step above. Flag this explicitly to the user rather than silently generating a single project that's wrong for one of the two targets.
+**Fully-qualify every DA reference — bare IDs only work for resources you own directly.** A real, confirmed bug from the first live WorkItem test: `POST /workitems` needs `activityId` as `<nickname>.<activityId>+<alias>` (e.g. `madcad.HatchBDaActivity+dev`), not the bare activity id — DA returned `BadRequest: "Cannot parse id."` / `"could not be found"` until this was fixed. The `appbundles` array inside an Activity body needs the same full qualification (`<nickname>.<bundleName>+<alias>`). `APS-Common.ps1`'s `Submit-WorkItem` and `Deploy-And-Test-DA.ps1` already build these correctly — if hand-editing DA REST calls, always qualify.
 
-**Deploying and testing against real APS Design Automation:** the `dotnet new acad-lisp` scaffold includes `da/APS-Common.ps1` (generic REST helpers — auth, AppBundle/Activity/WorkItem lifecycle, OSS upload/download — no per-migration edits needed) and `da/Deploy-And-Test-DA.ps1` (deploys the bundle + activity, submits a test WorkItem against the DA entry point, downloads the result; reads its shape from `da/activity.json`/`da/params.example.json`). Claude still authors `da/activity.json` and `da/params.example.json` per migration in Step 5 — they contain the actual DA command name and parameter fields, which are migration-specific and can't be templated generically. Requires `$env:APS_CLIENT_ID`/`$env:APS_CLIENT_SECRET` (an APS app with Design Automation + Data Management scopes) and a real seed `.dwg` to submit.
+**APS forgeapps nicknames are set-once, and the "unset" default is not blank.** `GET /forgeapps/me` returns `{ "id": "<value>" }` — but when no custom nickname has ever been registered, `<value>` defaults to the raw `APS_CLIENT_ID` itself, not `null`/empty. Checking truthiness alone (`if ($current.id)`) misreads the default identity as "already has a real nickname." The correct check compares against `$env:APS_CLIENT_ID` (`APS-Common.ps1`'s `Resolve-DANickname` does this) — if they're equal, no nickname exists yet and it's safe to register one from user input; if they differ, a real nickname is already registered and must be used as-is (PATCHing again once the app owns any bundle/activity fails with `"already has resources"`, whether or not the new value matches the old one). Never trust a `-Owner`/typed nickname over what `Resolve-DANickname` actually resolves.
+
+**Confirmed in practice: `Resolve-DANickname`'s own `GET /forgeapps/me` check can still misfire** (root cause not fully tracked down — possibly a response-shape or timing issue) and fall through to `Set-DANickname`, which then fails with a *warning*, not a thrown error, silently leaving the wrong `$Owner` for the rest of the run (the WorkItem then 404s on a bogus qualified activity ID). If a `Deploy-And-Test-DA.ps1` run fails with any nickname- or "could not be found"-shaped error, don't debug from scratch — re-read this paragraph first, then just pass `-Owner <the account's known real nickname>` explicitly. That sidesteps the detection logic entirely regardless of its root cause.
+
+**Resolve every user-supplied file path parameter (e.g. `-InputDwg`) to absolute before it reaches raw .NET file I/O.** A real bug: `Upload-ToOSS` uses `[System.IO.FileStream]`, which resolves relative paths against .NET's `Environment.CurrentDirectory` — **not** PowerShell's `$PWD`. The two silently diverge (`cd` in PowerShell doesn't move .NET's own CWD), so a bare relative `-InputDwg seed.dwg` can resolve against a totally different directory (observed: it resolved to the shell's original startup folder, not the `da\` folder the user had `cd`'d into) and fail with a confusing "Could not find file" pointing at the wrong path. Fix: `Test-Path` the param (this uses PowerShell's own path resolution correctly), then `$InputDwg = (Resolve-Path $InputDwg).Path` before it's used anywhere downstream. `Deploy-And-Test-DA.ps1` does this for both `-InputDwg` and `-ParamsJson`, the two user-overridable path params that flow into `Upload-ToOSS`.
+
+**If DA resource state gets confused across runs (mismatched owner prefixes, a corrupted nickname), `da/Reset-APSApp.ps1 -Confirm` is the clean-slate escape hatch** — `DELETE /forgeapps/me`, wiping every AppBundle/Activity/nickname for that `APS_CLIENT_ID`. It prints a warning banner with exact counts and requires typing `DELETE` before proceeding, and enforces a ~100s wait afterward (server-side deletion is not instant — racing it with an immediate `Deploy-And-Test-DA.ps1` run risks stale-state errors). This is a deliberate, rarely-needed reset, never part of the normal deploy/test flow.
+
+**Generating a seed `.dwg` when the developer doesn't have one (no AutoCAD desktop needed):** add a small dev-only `[CommandMethod]` (e.g. `HBSEED`) to the main plugin that builds whatever minimal entity the migrated command needs directly via the Database API (see `HatchBDA`'s `HbSeed()` — a bare 10×5 `Hatch` via `AppendLoop`/`EvaluateHatch`, no dependency on the command under test). Then drive `accoreconsole` with **no `/i`** at all (it opens its own default blank drawing) and a script that sets `FILEDIA 0` before `QSAVE` so the "Save Drawing As" prompt is answered on the command line instead of popping a (nonexistent, headless) dialog:
+```
+FILEDIA
+0
+SECURELOAD
+0
+NETLOAD
+<path>\<ProjectName>.dll
+HBSEED
+QSAVE
+<path>\seed.dwg
+QUIT
+Y
+```
+Label the seed command clearly as dev/test-only, not part of the migrated LISP surface, and never wire it into `PackageContents.xml`'s `<Commands>` list.
+
+**Skip this entirely if the migrated command builds geometry from scratch and never reads pre-existing entities** (e.g. a form-driven generator like a parametric part-drawing command — inputs are all in `params.json`, nothing depends on what's already in the drawing). In that case any blank drawing works as input; just run `accoreconsole` with no `/i` directly against the real command, no dev-only seed command needed at all. Only build a seed command when the migrated command's Discovery Table shows it reads/selects/computes against entities that must already exist (AcresDA, HatchBDA) — not when it only writes new ones (Flange).
+
+**Author `outputFile` to reuse the input's `localName`, not a new `SAVEAS` name.** `activity.json`'s `outputFile` parameter can deliberately share `localName` with `inputFile` (e.g. both `"input.dwg"`) — the command line's final `QSAVE` (no filename) then writes back to the file `accoreconsole` already has open, which DA uploads as the result. This avoids an untested `SAVEAS <newname>` scripting step and is the safer default unless the migration genuinely needs a differently-named output.
 
 ---
 
@@ -148,86 +164,21 @@ For every `[CommandMethod]` intended for the DA activity, check for and eliminat
 - File I/O (`open`, `write-line`, `close`)
 - String / math utilities (`strcat`, `itoa`, `rtos`, `atof`)
 - Unit tests for all commands
-- AppStore bundle packaging (desktop)
-- Design Automation bundle + activity (DA)
+- Design Automation bundle + activity deployment
 
 ### Out of Scope (v2)
 - DCL dialog box UI migration (CUIX/WPF replacement — needs design session)
-- `(command ...)` macro sequences
+- `(command ...)` sequences that depend on **live, mid-command user interaction** (e.g. `pause` inside a `command` call waiting on cursor drag, or a genuine multi-step wizard that can't be pre-supplied) — these have no DA equivalent at all, not even a parameter, since the "input" is continuous interaction, not a discrete value
 - Complex reactor chains
 - AutoLISP reactor / event-driven code
+
+**Not out of scope, despite first appearances:** `(command ...)` sequences that just construct or edit entities from already-known values (`circle`, `line`, `ellipse`, `array`, `layer`, `change`, `mtext`, `rotate` with a fixed angle) almost always have a direct typed API equivalent — build the entities directly via `AppendEntity`/`Transaction`, compute array/polar points yourself instead of calling the `ARRAY` command macro, use `Entity.TransformBy(Matrix3d.Rotation(...))` instead of an interactive `ROTATE ... pause`. Confirmed across two real migrations (AcresDA, Flange) where *zero* `(command ...)` calls survived into the final C# — every one had a typed replacement. Only the genuinely-interactive subset above stays out of scope.
 
 ---
 
 ## Pattern Mapping Reference
 
-### Selection Sets
-
-| AutoLISP | C# (.NET) |
-|----------|-----------|
-| `(ssget "_X" '((0 . "HATCH")))` | `db.GetModelSpace().Cast<Entity>().OfType<Hatch>()` |
-| `(ssget "_X" '((0 . "LINE")))` | `.OfType<Line>()` |
-| `(sslength ss)` | `selSet.Count` |
-| `(ssname ss i)` | `selSet[i]` |
-| `(ssadd ent ss)` | `selSet.Add(entity)` |
-
-### Entity Data (DXF Group Codes)
-
-| AutoLISP | C# (.NET) |
-|----------|-----------|
-| `(entget ent)` | `tr.GetObject(id, OpenMode.ForRead)` |
-| `(assoc 0 entdata)` | `entity.GetType().Name` (or `entity.GetRXClass().DxfName`) |
-| `(assoc 5 entdata)` | `entity.Handle.ToString()` |
-| `(assoc 8 entdata)` | `entity.Layer` |
-| `(assoc 10 entdata)` | depends on entity type (e.g., `line.StartPoint`) |
-| `(cdr (assoc 91 entdata))` | `hatch.NumberOfLoops` |
-| `(entmod newdata)` | `entity.UpgradeOpen(); entity.Property = value;` |
-| `(entdel ent)` | `entity.Erase()` |
-
-### VLA-Object / COM Interop
-
-| AutoLISP | C# (.NET) |
-|----------|-----------|
-| `(vlax-ename->vla-object ent)` | `tr.GetObject(ent, OpenMode.ForRead)` |
-| `(vla-get-Handle obj)` | `entity.Handle` |
-| `(vla-get-NumberOfLoops hatch)` | `hatch.NumberOfLoops` |
-| `(vlax-invoke-method hatch 'GetLoopAt 0 'loopObjs)` | `hatch.GetLoopAt(0, out loopType, out curves)` |
-| `(vlax-safearray->list coords)` | `curves.Cast<Entity>().ToList()` |
-| `(vla-get-Coordinates polyline)` | `lwpoly.GetPoint2dAt(i)` |
-
-### File I/O
-
-| AutoLISP | C# (.NET) |
-|----------|-----------|
-| `(open filename "w")` | `File.CreateText(path)` / `StreamWriter` |
-| `(write-line str file)` | `writer.WriteLine(str)` |
-| `(close file)` | `writer.Dispose()` / `using` block |
-| `(getvar "CDATE")` | `DateTime.Now.ToString("yyyyMMdd_HHmmss")` |
-
-### String / Math
-
-| AutoLISP | C# (.NET) |
-|----------|-----------|
-| `(strcat a b c)` | `string.Concat(a, b, c)` / `$"{a}{b}{c}"` |
-| `(itoa n)` | `n.ToString()` |
-| `(rtos x 2 8)` | `x.ToString("F8")` |
-| `(atof s)` | `double.Parse(s)` |
-| `(strlen s)` | `s.Length` |
-| `(substr s 1 n)` | `s.Substring(0, n)` |
-| `(fix x)` | `(int)x` |
-| `(logand a b)` | `a & b` |
-| `(1+ n)` | `n + 1` |
-| `(vl-remove-if pred list)` | `.Where(x => !pred(x))` |
-| `(foreach item list ...)` | `foreach (var item in list)` |
-| `(repeat n ...)` | `for (int i = 0; i < n; i++)` |
-
-### Command Registration
-
-| AutoLISP | C# (.NET) |
-|----------|-----------|
-| `(defun C:MYCOMMAND () ...)` | `[CommandMethod("MYCOMMAND")] public void MyCommand()` |
-| `(setq *VERBOSE* nil)` | `private bool _verbose = false;` |
-| `(princ msg)` | `ed.WriteMessage(msg)` |
+Detailed AutoLISP → C# mapping tables (Selection Sets, DXF Group Codes, VLA-Object/COM, File I/O, String/Math, Command Registration) live in [references/patterns.md](references/patterns.md) — load it when Step 1's Discovery Table needs a specific mapping not already obvious from context.
 
 ---
 
@@ -263,7 +214,7 @@ Read every line. Build a **Discovery Table** — this drives every decision in S
 | **DXF reads** | `(assoc N entdata)` for any group code N | Look up typed property from the pattern table |
 | **DXF writes** | `(entmod ...)` with `(cons N val)` | `entity.Property = value` after `UpgradeOpen()` |
 | **COM calls** | `vlax-invoke-method`, `vla-get-*`, `vla-put-*` | Typed .NET equivalent from the pattern table |
-| **User input** | `(getpoint)`, `(getreal)`, `(getstring)`, `(getdist)` | `ed.GetPoint()`, `ed.GetDouble()`, `ed.GetString()`, `ed.GetDistance()` |
+| **User input** | `(getpoint)`, `(getreal)`, `(getstring)`, `(getdist)`, `(getfiled)` | **Never** `ed.GetPoint()`/`ed.GetString()`/dialogs — becomes a field on the DA parameter record (e.g. `GPathDaInput`), read from `params.json`. See Design Automation Guardrail. |
 | **File I/O** | `(open ...)`, `(write-line ...)`, `(close ...)` | `StreamWriter` / `JsonSerializer` |
 | **Math/String** | `(sin)`, `(cos)`, `(strcat)`, `(itoa)`, `(atof)` etc. | Direct C# / `Math.*` / string interpolation |
 | **DCL** | `load_dialog`, `new_dialog`, `action_tile` | OUT OF SCOPE — v2 TODO stub |
@@ -300,11 +251,11 @@ Where `<year>` is `2025`, `2026`, or `2027` resolved from Step 0.
 
 **Auto mode:** run both commands directly. **Pair-programming mode:** print both commands and wait for the user to confirm they ran the scaffold command before reading generated files in the next step.
 
-The template produces a complete scaffold with TFM, NuGet versions, `PackageContents.xml` serial, and `RunIntegrationTests.ps1` defaults all pre-resolved for the chosen AutoCAD version:
+The template produces a complete scaffold with TFM, NuGet versions, and `PackageContents.xml` serial pre-resolved for the chosen AutoCAD version. **This does not include the actual accoreconsole filesystem path** — `RunIntegrationTests.ps1`'s `-Accore` default is the standard Autodesk installer location (`C:\Program Files\Autodesk\AutoCAD <year>\accoreconsole.exe`), which is correct for most customers but is still a template placeholder, not this specific customer's confirmed path. Before handing the file to the user (or running it in Auto mode), replace the default with the actual `accoreconsole` path resolved from Step 0's answer if it differs — this skill must work in the customer's environment, not just the one it was authored on.
 
 ```
 <ProjectName>/
-  <ProjectName>.csproj                  ← correct TFM + AutoCAD.NET version
+  <ProjectName>.csproj                  ← correct TFM + AutoCAD.NET.Core version (only package used)
   App.cs                                ← IExtensionApplication stub
   Commands.cs                           ← [CommandMethod] stub  ← Claude fills (Step 3)
   PackageContents.xml                   ← correct SeriesMin/Max
@@ -328,7 +279,7 @@ The template produces a complete scaffold with TFM, NuGet versions, `PackageCont
   AGENTS.md                             ← AI coding context for the generated project
 ```
 
-The `da/` folder is only relevant if the target includes DA — `activity.json` and `params.example.json` are authored by Claude in Step 5 (migration-specific content), while `APS-Common.ps1`/`Deploy-And-Test-DA.ps1` are ready to use as scaffolded. See the Design Automation Guardrail for what belongs in the DA-facing entry point.
+`activity.json` and `params.example.json` are authored by Claude in Step 5 (migration-specific content — the actual DA command name and parameter fields), while `APS-Common.ps1`/`Deploy-And-Test-DA.ps1` are ready to use as scaffolded. See the Design Automation Guardrail for what belongs in every generated command.
 
 After the user runs the scaffold command, read the generated stubs and proceed to Step 3.
 
@@ -342,36 +293,48 @@ The file structure is **derived from the Discovery Table**, not fixed. Only crea
   Commands.cs                     ← always: one [CommandMethod] per discovered C: command
   Helpers/<GroupName>.cs          ← only if: helper defuns exist; group by logical concern
   Models/<EntityName>Data.cs      ← only if: 3+ related fields are extracted from one entity type
+  Models/<CommandName>Input.cs    ← if: the command took any getpoint/getstring/getfiled/etc. input — always parameterized, even for a single value
+  da/params.schema.json           ← always if Models/<CommandName>Input.cs exists — machine-readable mirror of it
 ```
 
 **Derivation rules:**
 
 - **Commands.cs** — one `public void CmdName()` per `(defun C:NAME ...)`. Use the Discovery Table to fill the body: entity filters, DXF→property reads, writes, file output.
 - **Helpers/** — create if there are non-trivial helper `defun`s. Name the file after the logical group (e.g., `GeometryHelper.cs`, `StringHelper.cs`, `LayerHelper.cs`). Skip if helpers are simple one-liners inlined in the command.
-- **Models/** — create a `record` only when a command builds a structured data object from 3+ related fields. Name it after the entity concept (e.g., `HatchBoundary`, `TextItem`, `BlockRef`). Skip if data is just passed through inline.
+- **Models/`<EntityName>Data.cs`** — create a `record` only when a command builds a structured data object from 3+ related fields. Name it after the entity concept (e.g., `HatchBoundary`, `TextItem`, `BlockRef`). Skip if data is just passed through inline.
+- **Models/`<CommandName>Input.cs`** — create whenever the original LISP command took *any* interactive input (`getpoint`, `getstring`, `getfiled`, `getkword`, etc.), regardless of how many values. One field per input, in the order the original prompted for them. This is not optional and not conditioned on field count — see Design Automation Guardrail.
+- **da/`params.schema.json`** — whenever a `<CommandName>Input.cs` record exists, also emit a plain JSON Schema mirror of it: one property per field, with `type` (`boolean`/`string`/`number`/`array`/etc. mapped from the C# type), `default` (from the record's `= ...` initializer, if any), and `description` (copied from the field's XML doc comment). This is the machine-readable contract for anything that needs to *produce* a valid `params.json` without reading C# — a hand-built form, a different skill generating a UI, a validation step. It is not DA-specific config and not a DCL/HTML feature; it's the same Input record, just in a format non-.NET tooling can consume. Keep it in sync with the record — regenerate whenever a field is added/renamed/retyped.
 - **App.cs** — always include `InternalsVisibleTo("<ProjectName>.IntegrationTests")` for test access to `internal` helpers.
 
-**Per-command body pattern:**
+**Per-command body pattern — reads parameters, never prompts:**
 ```csharp
 [CommandMethod("CMDNAME")]
 public void CmdName()
 {
-    var doc = Application.DocumentManager.MdiActiveDocument;
-    var db  = doc.Database;
-    var ed  = doc.Editor;
+    var db = HostApplicationServices.WorkingDatabase;
+
+    string paramsPath = Path.Combine(Environment.CurrentDirectory, "params.json");
+    var input = JsonSerializer.Deserialize<CmdNameInput>(File.ReadAllText(paramsPath))
+        ?? throw new InvalidOperationException($"Failed to parse {paramsPath}");
+
     using var tr = db.TransactionManager.StartTransaction();
     try
     {
-        // body derived from Discovery Table rows for this command
+        // body derived from Discovery Table rows for this command, reading from `input`
+        // instead of interactive getpoint/getstring/getfiled calls
         tr.Commit();
     }
-    catch (System.Exception ex)
+    catch (System.Exception)
     {
-        ed.WriteMessage($"\nError: {ex.Message}\n");
         tr.Abort();
+        throw; // let the DA WorkItem report the failure — there's no interactive session to recover into
     }
 }
 ```
+
+`WriteMessage`-style logging is still available (`AcCoreMgd.dll` includes the Editor) — but `Autodesk.AutoCAD.ApplicationServices.Application` (the bare desktop type) does **not** exist in a Core-only project and fails with `CS0234` (`AcMgd.dll`-only type, never referenced here — see the Design Automation Guardrail). Use `Autodesk.AutoCAD.ApplicationServices.Core.Application` instead — same `DocumentManager.MdiActiveDocument.Editor.WriteMessage(...)` surface, just the `.Core` namespace segment. Confirmed by an actual `dotnet build` failure/fix during the `gpmain.lsp` GardenPathDA migration; the scaffold's own `App.cs` template had this bug and has since been corrected.
+
+**Use `Editor.WriteMessage`, not `Console.WriteLine`, for all command output/logging — never treat `Console.WriteLine` as an equivalent fallback.** `accoreconsole` happens to surface stdout locally, which makes `Console.WriteLine` look like it works during integration testing — but the real cloud Design Automation engine is not guaranteed to capture bare stdout the same way. `Editor.WriteMessage` writes through AutoCAD's own command-line/report pipeline, which is what actually ends up in the WorkItem's downloadable report log. Every `(princ ...)`/`(prompt ...)` call in the original LISP should map to `Editor.WriteMessage`, full stop — this replaces the earlier (incorrect) guidance that `Console.WriteLine` was a safe fallback needing no verification.
 
 **Watch for `CS0104` ambiguous references — a whole category, not a one-off.** Several AutoCAD.NET namespaces shadow common BCL/WinForms type names. When both are `using`'d, the bare name is ambiguous and fails to compile. Always fully qualify the AutoCAD one, or alias it. Known collisions found in real migrations so far:
 
@@ -426,11 +389,10 @@ Name the command `<ProjectName>SetupTest` (template pre-fills this).
     Assert.That(TestData.<Property>, Is.<Constraint>);
 ```
 
-**Package rule (integration test project only):**
-- `AutoCAD.NET.Core` — `AcCoreMgd.dll` only (Database, Geometry, Runtime, Editor). Safe in accoreconsole.
-- Never `AutoCAD.NET` in test project — pulls `AcMgd.dll` (desktop UI), crashes accoreconsole with `0xC0000005`.
-- Main plugin project keeps `AutoCAD.NET` (targets interactive AutoCAD).
-- `ExcludeAssets="runtime"` on both — accoreconsole provides assemblies at runtime.
+**Package rule (test project, matching the main plugin project — see Design Automation Guardrail):**
+- `AutoCAD.NET.Core` — `AcCoreMgd.dll` only (Database, Geometry, Runtime, Editor). Safe in accoreconsole and in the real DA engine.
+- Never `AutoCAD.NET` anywhere in this skill's output — pulls `AcMgd.dll` (desktop UI), crashes accoreconsole and DA alike with `0xC0000005`.
+- `ExcludeAssets="runtime"` — accoreconsole/DA provide the assemblies at runtime.
 - Pin `System.Drawing.Common` to `8.0.0` explicitly — `ExtentReports` pulls `RazorEngine.NetCore.nixFix` → `System.Drawing.Common 5.0.0`, flagged `NU1904` (GHSA-rxg9-xrhp-64gj). Already included in the `dotnet new acad-lisp` template.
 
 Run tests per the chosen Execution Mode: **Auto** runs `dotnet test` and `RunIntegrationTests.ps1` directly; **Pair-programming** prints both commands and waits for the user's results before continuing.
@@ -450,124 +412,21 @@ The `dotnet new acad-lisp` scaffold already generated `PackageContents.xml` with
 </Commands>
 ```
 
-For **desktop + AppStore** deployment, the scaffold already includes `New-Bundle.ps1` — builds the project and assembles `<ProjectName>.bundle\Contents\Win64\` with the correct DLL/PDB:
+The scaffold already includes `New-Bundle.ps1` — builds the project and assembles `<ProjectName>.bundle\Contents\Win64\` with the correct DLL/PDB. This is the same bundle folder structure `Deploy-And-Test-DA.ps1` zips and uploads as the APS AppBundle — there's no separate desktop-bundle step:
 
 ```powershell
 ./New-Bundle.ps1 -Config Release
-# or, to deploy straight to %APPDATA%\Autodesk\ApplicationPlugins for local testing:
-./New-Bundle.ps1 -Config Release -Deploy
 ```
 
-Run per Execution Mode as with build/test above.
+(`New-Bundle.ps1`'s `-Deploy` flag, if present, copies to `%APPDATA%\Autodesk\ApplicationPlugins` for a local desktop sanity-check load — useful for confirming the assembly loads and runs cleanly before submitting a real DA WorkItem, but not the deployment path itself.)
 
-For **Design Automation**, the bundle is the same structure but the activity JSON uses `da_engine` from the version table:
-```json
-{ "engine": "<da_engine>", "appbundles": ["<owner>.<ProjectName>+dev"] }
-```
-
-No editor (`ed`) calls in the DA variant — replace with file output or return codes.
+Run per Execution Mode as with build/test above. Then fill in `da/activity.json` with the real command name(s) and `da_engine` from the version table, `da/params.example.json` with the actual `<CommandName>Input` fields, and `da/params.schema.json` as the JSON Schema mirror of the same `<CommandName>Input.cs` record (see Step 3's derivation rules) — see the Design Automation Guardrail for `Deploy-And-Test-DA.ps1` usage.
 
 ---
 
 ## Migration Examples
 
-### Example 1: ssget + sslength + ssname loop
-
-**LISP:**
-```lisp
-(setq ss (ssget "_X" '((0 . "HATCH"))))
-(repeat (sslength ss)
-  (setq ent (ssname ss i))
-  ...
-  (setq i (1+ i))
-)
-```
-
-**C#:**
-```csharp
-using (var tr = db.TransactionManager.StartTransaction())
-{
-    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-    var btr = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-    foreach (ObjectId id in btr)
-    {
-        var entity = tr.GetObject(id, OpenMode.ForRead) as Hatch;
-        if (entity == null) continue;
-        // ... process hatch
-    }
-    tr.Commit();
-}
-```
-
-### Example 2: entget + assoc DXF extraction
-
-**LISP:**
-```lisp
-(setq entdata (entget ent))
-(setq handle (cdr (assoc 5 entdata)))
-(setq numLoops (cdr (assoc 91 entdata)))
-```
-
-**C#:**
-```csharp
-var hatch = (Hatch)tr.GetObject(id, OpenMode.ForRead);
-string handle = hatch.Handle.ToString();
-int numLoops = hatch.NumberOfLoops;
-```
-
-### Example 3: GetLoopAt boundary extraction
-
-**LISP:**
-```lisp
-(vlax-invoke-method hatch-obj 'GetLoopAt 0 'loopObjs)
-```
-
-**C#:**
-```csharp
-hatch.GetLoopAt(0, out HatchLoopTypes loopType, out Curve2dCollection curves);
-foreach (var curve in curves.Cast<CircularArc2d>())
-{
-    // process curve
-}
-```
-
-### Example 4: File output → JSON
-
-**LISP:**
-```lisp
-(setq json-file (open filename "w"))
-(write-line "[" json-file)
-(write-line (strcat "  {\"handle\": \"" handle "\"}") json-file)
-(write-line "]" json-file)
-(close json-file)
-```
-
-**C#:**
-```csharp
-var records = hatches.Select(h => new { handle = h.Handle.ToString(), vertices = ExtractVertices(h) });
-File.WriteAllText(outputPath, JsonSerializer.Serialize(records, new JsonSerializerOptions { WriteIndented = true }));
-```
-
----
-
-## Verbose / Quiet Mode Pattern
-
-**LISP:**
-```lisp
-(setq *HATCH_EXPORT_VERBOSE* nil)
-(defun dbg-print (msg)
-  (if *HATCH_EXPORT_VERBOSE* (princ msg))
-)
-```
-
-**C#:**
-```csharp
-private bool _verbose = false;
-private void DbgPrint(string msg)
-{
-    if (_verbose) _ed.WriteMessage(msg);
-}
-```
+Five worked LISP → C# examples (ssget loop, entget+assoc extraction, GetLoopAt boundary extraction, file output → JSON, Region perimeter via Brep) plus the verbose/quiet-mode pattern live in [references/examples.md](references/examples.md) — load it when generating code for a pattern that matches one of these shapes.
 
 ---
 
@@ -582,24 +441,12 @@ private void DbgPrint(string msg)
 | DXF fallback (group code 10 before 91) | Elevation point confusion | Use typed API, skip DXF parsing entirely |
 | `(setq x nil)` null checks | Implicit nil = false | Explicit null checks in C# |
 | DCL dialogs | No direct .NET equivalent | v2: WPF / Palette / CUIX |
-| `(command ...)` sequences | Runtime-dependent | Avoid; use direct API calls |
+| `(command ...)` sequences | Runtime-dependent | Avoid; use direct API calls — see the Scope section's "Not out of scope, despite first appearances" note. Only sequences needing genuine live mid-command interaction (e.g. `pause`) stay out of scope entirely. |
 | `(findfile ...)` | LISP searches ACAD support file paths (`ACAD` sysvar), not just the literal path | `File.Exists`/`File.Open` only check the literal path — document as a v2 TODO if the original relied on support-path search, don't silently narrow behavior |
 | `(findfile ...)` gating a write/export operation | `findfile` only returns non-nil if the file **already exists** — if the original code requires `findfile` to succeed before it will export/create, it can never write a brand-new file, only overwrite an existing one. This is a real bug in several jtbworld.com samples (e.g. `viewsIO.lsp`'s `c:-ExportViews`), not intentional design. | Fix it: only gate the *overwrite confirmation* on `File.Exists`, and export unconditionally when the file doesn't exist yet. Comment the deviation from literal LISP behavior. |
 | `DBVisualStyle` string-valued traits | No typed setter exists for many `VisualStyleProperty` values (readable via generic trait enumeration, not settable the same way) | Capture on export via the generic trait API; document as a known limitation on import rather than guessing a setter that doesn't exist |
-| `getfiled` (LISP file picker) | GUI dialog, needs a .NET equivalent; also incompatible with DA — see Conversion Targets | `System.Windows.Forms.OpenFileDialog`/`SaveFileDialog` + `<UseWindowsForms>true</UseWindowsForms>` in the csproj — check for an `Autodesk.AutoCAD.Windows` wrapper first, but don't assume one exists for every entity/version; WinForms is the safe fallback. For a DA target, generate a parameterized entry point instead — no dialog. |
+| `getfiled` (LISP file picker) | GUI dialog — impossible headless, no message pump | Never a dialog. Becomes a file-path field on the command's `<CommandName>Input` record, read from `params.json` — see Design Automation Guardrail |
+| `DBObjectCollection` / `Region.CreateFromCurves` result wrapped in `using` | Once appended via `AppendEntity` + `AddNewlyCreatedDBObject`, the transaction owns the object. Disposing the wrapping collection afterward (or a collection wrapping an already transaction-owned curve passed *into* `CreateFromCurves`) double-frees it — crashes `accoreconsole`/DA with an **uncatchable native SEH exception** (observed `0xE0000001` in `KERNELBASE.dll`, no managed stack trace, no `try/catch` helps). Confirmed during AcresDA integration testing; only found via `cer.log` + bisecting with `Editor.WriteMessage` checkpoints. | Never wrap a `DBObjectCollection` in `using` once its contents (or contents passed into it) become transaction-owned. |
+| `Hatch.AppendLoop(HatchLoopTypes loopType, ObjectIdCollection dbObjIds)` without `HatchLoopTypes.External` | Compiles fine, then crashes natively inside `Hatch.EvaluateHatch(true)` — same uncatchable-SEH class as above, not a .NET exception. | Always OR in `HatchLoopTypes.External` when the loop boundary references an existing db curve by `ObjectId`. |
+| ObjectDBX cross-file scanning (`vla-Open` on a *referenced* file to inspect its contents — e.g. an Xref manager counting nested xrefs/layers/blocks in each referenced drawing) | The referenced files are on the *local* filesystem the original LISP ran on. A DA sandbox only has what's explicitly uploaded — none of those files travel with the main input `.dwg` automatically. | Unsolved as of this writing — options are (a) scope down to what's derivable from the top-level `.dwg` alone (no nested-file open needed), or (b) require an upload manifest/zip preserving the referenced files' relative paths. Flag this explicitly to the user before committing to a design; don't silently drop the deep-scan feature or silently assume file access that won't exist in DA. |
 
----
-
-## AU 2026 Demo Targets
-
-Target files for live migration demo:
-
-1. `ExportHatchToJSON.lsp` → `HatchExporter.cs`
-   - Shows: ssget, entget, GetLoopAt, file output
-   - Tests: boundary extraction, JSON format
-
-2. `TextExtract.lsp` → `TextExtractor.cs`  
-   - Shows: text entity ops, string handling
-
-3. `APS_ExportHatchToJSON.lsp` → `ApsHatchExporter.cs`
-   - Shows: DA/headless variant, no editor dependency

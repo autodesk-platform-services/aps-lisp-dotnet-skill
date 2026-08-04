@@ -13,18 +13,28 @@ param(
     [string] $ActivityDef = "$PSScriptRoot\activity.json",
     [string] $ParamsJson  = "$PSScriptRoot\params.example.json",
     [string] $InputDwg,
-    [string] $Owner       = $env:APS_NICKNAME,
+    [string] $Owner       = "",
     [string] $Alias       = "dev",
     [string] $OutDir      = "$PSScriptRoot\workitem-results"
 )
 
 $ErrorActionPreference = "Stop"
-. "$PSScriptRoot\APS-Common.ps1"
+. "$PSScriptRoot\APS-Common.ps1"   # dot-sourcing loads .env (if present) via Import-DotEnv
 
-if (-not $Owner)    { $Owner    = Read-Host "APS app nickname (forgeapps owner prefix)" }
+# Checked here, not as a param default — .env is only loaded once APS-Common.ps1 is
+# dot-sourced above, which happens after PowerShell evaluates param() defaults.
+if (-not $Owner) { $Owner = $env:APS_NICKNAME }
+if (-not $Owner) { $Owner = Read-Host "APS app nickname (forgeapps owner prefix)" }
 if (-not $InputDwg) { Write-Error "Pass -InputDwg <seed drawing>."; exit 1 }
+if (-not (Test-Path $InputDwg)) { Write-Error "Input drawing not found: $InputDwg"; exit 1 }
+# Resolve to an absolute path now — Upload-ToOSS uses raw [System.IO.FileStream], which
+# resolves relative paths against .NET's Environment.CurrentDirectory, NOT PowerShell's
+# $PWD. The two can silently differ (cd in PowerShell doesn't move .NET's CWD), so a bare
+# relative -InputDwg can resolve against the wrong directory downstream.
+$InputDwg = (Resolve-Path $InputDwg).Path
 if (-not (Test-Path $ActivityDef)) { Write-Error "Activity definition not found: $ActivityDef"; exit 1 }
 if (-not (Test-Path $BundleDir))   { Write-Error "Bundle not found: $BundleDir — run New-Bundle.ps1 first."; exit 1 }
+if (Test-Path $ParamsJson) { $ParamsJson = (Resolve-Path $ParamsJson).Path }  # same FileStream/CWD risk as $InputDwg above
 
 $activity   = Get-Content $ActivityDef -Raw | ConvertFrom-Json
 $bundleName = (Split-Path $BundleDir -Leaf) -replace '\.bundle$', ''
@@ -32,7 +42,7 @@ $zipPath    = "$PSScriptRoot\$bundleName.zip"
 
 Write-Host "== APS Design Automation: deploy + test $bundleName ==" -ForegroundColor Cyan
 $token = Get-APSToken
-Set-DANickname $token $Owner
+$Owner = Resolve-DANickname $token $Owner
 
 Write-Host "`n-- AppBundle --"
 Deploy-Bundle $token $bundleName $activity.engine "Migrated via /lisp-to-dotnet" $BundleDir $zipPath
@@ -66,7 +76,7 @@ if (Test-Path $ParamsJson) {
     $arguments["params"] = @{ url = Get-OSSSignedUrl $token $bucketKey "params.json" "read" }
 }
 
-$workItemId = Submit-WorkItem $token $activity.id $Alias $arguments
+$workItemId = Submit-WorkItem $token "$Owner.$($activity.id)" $Alias $arguments
 $result     = Wait-WorkItem $token $workItemId
 
 New-Item -ItemType Directory -Force $OutDir | Out-Null
