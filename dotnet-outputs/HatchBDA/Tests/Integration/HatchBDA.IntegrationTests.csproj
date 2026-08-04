@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <AssemblyName>HatchBDA.IntegrationTests</AssemblyName>
+    <RootNamespace>HatchBDA.IntegrationTests</RootNamespace>
+    <!-- Force NUnit/NUnitLite/ExtentReports DLLs into output — NETLOAD needs them on disk. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NUnit"            Version="4.3.2" />
+    <PackageReference Include="NUnitLite"        Version="4.3.2" />
+    <PackageReference Include="ExtentReports"    Version="5.0.4" />
+    <!-- ExtentReports pulls RazorEngine.NetCore.nixFix -> System.Drawing.Common 5.0.0,      -->
+    <!-- flagged by NU1904 (GHSA-rxg9-xrhp-64gj). Pin to a patched version explicitly.        -->
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+    <!-- AcCoreMgd.dll = Database + Geometry + Runtime + Editor — works headless.     -->
+    <!-- AcMgd.dll    = desktop UI layer — crashes accoreconsole with 0xC0000005.     -->
+    <!-- Use AutoCAD.NET.Core (omits AcMgd) for integration tests; never AutoCAD.NET. -->
+    <PackageReference Include="AutoCAD.NET.Core" Version="26.0.0" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\HatchBDA.csproj" />
+  </ItemGroup>
+</Project>

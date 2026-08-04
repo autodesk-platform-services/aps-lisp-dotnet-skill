@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HatchBoundaryInput",
+  "description": "JSON Schema mirror of Models/HatchBoundaryInput.cs — the contract for da/params.json. Regenerate by hand if the record changes.",
+  "type": "object",
+  "properties": {
+    "ProcessAllHatches": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true (the default), every HATCH entity found in the drawing's layouts is processed — the DA equivalent of \"just pick them all\" rather than a filtered pick."
+    },
+    "HatchHandles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Optional explicit selection. Only consulted when ProcessAllHatches is false. Each entry is an AutoCAD entity Handle, e.g. the hex string produced by Entity.Handle.ToString()."
+    }
+  },
+  "additionalProperties": false
+}

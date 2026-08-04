@@ -1,0 +1,33 @@
+{
+  "id": "HatchBDaActivity",
+  "description": "Recreates HATCH entity boundaries as ordinary drawing entities (line/arc/circle/ellipse/polyline) via the HATCHB command, headless.",
+  "engine": "Autodesk.AutoCAD+26_0",
+  "commandLine": [
+    "$(engine.path)\\accoreconsole.exe /i \"$(args[inputFile].path)\" /al \"$(appbundles[HatchBDA].path)\" /s \"$(settings[script].path)\""
+  ],
+  "parameters": {
+    "inputFile": {
+      "verb": "get",
+      "description": "Drawing containing the HATCH entities to recreate as boundary geometry.",
+      "required": true,
+      "localName": "input.dwg"
+    },
+    "params": {
+      "verb": "get",
+      "description": "Optional HatchBoundaryInput JSON — ProcessAllHatches (default true) or an explicit HatchHandles list. See Models/HatchBoundaryInput.cs. Omit to process every hatch in the drawing.",
+      "required": false,
+      "localName": "params.json"
+    },
+    "outputFile": {
+      "verb": "put",
+      "description": "Same drawing, saved in place after boundary entities were added. Shares input.dwg's localName deliberately — QSAVE writes back to the file accoreconsole already has open, which DA then uploads as the result. Avoids a SAVEAS-with-new-name script step that was never verified against real accoreconsole.",
+      "required": true,
+      "localName": "input.dwg"
+    }
+  },
+  "settings": {
+    "script": {
+      "value": "HATCHB\nQSAVE\n"
+    }
+  }
+}
