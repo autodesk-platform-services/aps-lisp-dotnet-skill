@@ -1,9 +1,5 @@
 # AutoLISP → AutoCAD .NET Migration Skill
 
-**Status as of 2026-07-12** — AU 2026 planning
-
----
-
 ## Problem
 
 Visual LISP (`vlax-*`, `vla-*`, COM/ActiveX calls) does not run in Design Automation — the COM runtime is absent from headless `accoreconsole`. Basic AutoLISP (`entget`, `ssget`, `entmod`) does run in DA, but most real-world LISP plugins use Visual LISP COM calls and are blocked from the cloud. Migrating to the typed .NET API is the only path to Design Automation for those plugins — and it removes the C# syntax barrier for LISP developers making that jump.
@@ -26,6 +22,8 @@ It is **not** a fixed template for one entity type — the Discovery Table proce
 
 **A real APS quirk worth documenting because it cost real debugging time:** `GET /forgeapps/me` returns your raw `APS_CLIENT_ID` as the identity when no custom nickname has ever been registered — not `null`/blank. A naive truthiness check misreads that default as "already has a nickname." `Resolve-DANickname` (in `da/APS-Common.ps1`) compares against `$env:APS_CLIENT_ID` explicitly, and every downstream reference (bundle, activity, WorkItem) is qualified as `<nickname>.<id>+<alias>` — bare IDs only work for direct-ownership calls, not cross-references. `da/Reset-APSApp.ps1 -Confirm` is the deliberate, warning-gated clean-slate reset for when resource state gets confused across runs.
 
+8. **Machine-readable params contract** — every migration with a `Models/<CommandName>Input.cs` record also emits `da/params.schema.json`, a plain JSON Schema mirror of it (field name, type, default, description). Lets any non-.NET consumer — a hand-built HTML form, a different tool — know the `params.json` contract without parsing C#. First use case: a planned v2 pattern mapping LISP DCL dialogs to a static HTML form that feeds this schema.
+
 ## Validated So Far
 
 **The eval suite (`evals/evals.json`) is the primary quality gate** — 3 fixed cases run by spawning an isolated subagent that genuinely invokes the Skill tool (not an improvised walkthrough), graded against concrete filesystem/build assertions:
@@ -45,14 +43,20 @@ Getting there surfaced (and fixed, in both the instance and the template — sel
 
 `dotnet-outputs/GardenPath` and `dotnet-outputs/ViewsIO` predate the DA-only pivot and reflect the old desktop-oriented shape — kept for historical reference, not as current expected output. `dotnet-outputs/HatchBDA` is the current DA-only worked example.
 
+**Two more independent real APS Design Automation successes since HatchBDA**, run against real customer LISP (Gil Cordle, LJA): `AcresDA` (from `Gil_Cordle_ACRES.lsp`) and `FlangeDA` (from `Flange.lsp`'s non-dialog logic, `mode=pat` hole-pattern branch) each submitted a real WorkItem and got a result back. AcresDA's testing surfaced two generalizable AutoCAD .NET Core native-crash gotchas (now in `SKILL.md`'s Known Edge Cases): a `Region`/`using` double-free, and `Hatch.AppendLoop` needing `HatchLoopTypes.External`. Three independent real deploys now, not one.
+
+**Tier 1 corpus sweep (2026-08-04):** a Discovery-Table-only dry run (no scaffolding) across all 62 non-fixture files in `lisps/` — 62/62 produced a table, no silent skips. Surfaced real corpus data-quality issues (several files with genuinely corrupted/truncated source, verified against actual bytes, not hallucinated) and out-of-scope-beyond-DCL edge cases (e.g. a file driving an external `CAO.dbConnect` COM server, not core AutoCAD). Full migration (Tier 2) and real-deploy (Tier 3) passes on a representative sample are next.
+
+**Repo is now on GitHub (internal visibility):** [github.com/autodesk-platform-services/aps-lisp-dotnet-skill](https://github.com/autodesk-platform-services/aps-lisp-dotnet-skill), with a WIP `README.md` and before/after demo media.
+
 **Explored and ruled out:** AutoCAD's built-in Action Recorder (`ACTRECORD`/`ACTSTOP`/playback via macro name) was tested as a way to record LISP command interactions once and replay them against migrated .NET commands for automated equivalence checking. Not viable — Action Recorder macros are bound to the *provenance* of the command they were recorded against (LISP vs. compiled/managed), not just its name; replaying against a same-named .NET command fails with "Lisp Command Missing." Not applicable to DA-only migrations anyway, since there's no interactive session to record against.
 
 ## Known Gaps
 
-- **Sample breadth.** Three eval cases plus one deep real-DA validation (HatchBDA) confirm the approach; a broader sweep of the `lisps/` corpus (64 real-world files) would raise confidence further before a live audience.
+- **Sample breadth — in progress.** Tier 1 (Discovery-Table dry run, all 62 corpus files) is done; Tier 2 (full migration on a representative sample) and Tier 3 (real DA deploy on a subset) are next.
 - **Eval case 2 needs a from-scratch automated re-run** to confirm the skill alone (no manual intervention) reproduces the HatchBDA result end-to-end — the current validation combined an automated subagent run with manual completion.
-- **A shared DA deployment CLI (`aps-revit-automation-cli`-style, or built on the user's own `aps-datester` `DesignAutomationService`) was considered and explicitly deferred.** Per-migration PowerShell scripts (`da/*.ps1`) stay the mechanism: when a real APS bug surfaces, the fix is a direct, visible edit to a script the developer already has open, not a separate CLI build/release cycle. Revisit only if this scales to many teams maintaining many generated projects in parallel.
+- **A shared DA deployment CLI was considered and explicitly deferred.** Per-migration PowerShell scripts (`da/*.ps1`) stay the mechanism: when a real APS bug surfaces, the fix is a direct, visible edit to a script the developer already has open, not a separate CLI build/release cycle.
 
 ## Bottom Line
 
-The core pipeline — analyze, scaffold, generate, test, package, **deploy to real APS Design Automation and get a successful WorkItem back** — now works end-to-end, verified against the actual Autodesk cloud service rather than just local builds. What's left is breadth (more sample files, a clean automated re-run of the HatchBDA case) rather than fixing the core mechanism.
+The core pipeline — analyze, scaffold, generate, test, package, **deploy to real APS Design Automation and get a successful WorkItem back** — works end-to-end, verified three times independently against the actual Autodesk cloud service (HatchBDA, AcresDA, FlangeDA), not just local builds. A corpus-wide dry run (62 files) confirms the analysis step generalizes beyond hand-picked samples. What's left is depth on that breadth (Tier 2/3 full migrations + deploys) rather than fixing the core mechanism.
