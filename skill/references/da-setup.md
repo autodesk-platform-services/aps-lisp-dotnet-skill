@@ -44,7 +44,7 @@ If the migrated command only *creates* geometry from scratch (form-driven genera
 
 ## Nickname/resource issues mid-deployment
 
-If a `Deploy-And-Test-DA.ps1` run fails with a nickname- or "could not be found"-shaped error, see SKILL.md's Design Automation Guardrail for the two confirmed root causes (unqualified `activityId` references, and the `GET /forgeapps/me` default-identity-equals-`APS_CLIENT_ID` gotcha) before assuming it's a new bug. **Also confirmed in practice: `Resolve-DANickname`'s own detection can misfire and silently keep the wrong `$Owner`** — the fastest fix is always `-Owner <known real nickname>` explicitly, regardless of root cause. `da/Reset-APSApp.ps1 -Confirm` is the last-resort clean-slate reset if resource state is genuinely confused across runs.
+If a `Deploy-And-Test-DA.ps1` run fails with a nickname- or "could not be found"-shaped error, see SKILL.md's Design Automation Guardrail for the confirmed root causes (unqualified `activityId` references, the `GET /forgeapps/me` default-identity-equals-`APS_CLIENT_ID` gotcha, and `Resolve-DANickname` trusting a requested nickname that never actually PATCHed — fixed at the source, see SKILL.md) before assuming it's a new bug. `-Owner <known real nickname>` explicitly still works as a fast manual override if needed. `da/Reset-APSApp.ps1 -Confirm` is the last-resort clean-slate reset if resource state is genuinely confused across runs.
 
 ## Reusing an existing `.env` across migrations
 

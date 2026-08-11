@@ -4,6 +4,7 @@ using Autodesk.AutoCAD.Runtime;
 [assembly: ExtensionApplication(typeof(MyPlugin.App))]
 [assembly: CommandClass(typeof(MyPlugin.Commands))]
 [assembly: InternalsVisibleTo("MyPlugin.IntegrationTests")]
+[assembly: InternalsVisibleTo("MyPlugin.Tests")]
 
 namespace MyPlugin;
 

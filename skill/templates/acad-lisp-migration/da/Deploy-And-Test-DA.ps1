@@ -8,6 +8,7 @@
 #
 # Usage:
 #   ./Deploy-And-Test-DA.ps1 -InputDwg path\to\seed.dwg
+#   ./Deploy-And-Test-DA.ps1 -InputDwg path\to\seed.dwg -ExtraFiles @{ xrefFile = "path\to\xref.dwg" }
 param(
     [string] $BundleDir   = "$PSScriptRoot\..\MyPlugin.bundle",
     [string] $ActivityDef = "$PSScriptRoot\activity.json",
@@ -15,7 +16,12 @@ param(
     [string] $InputDwg,
     [string] $Owner       = "",
     [string] $Alias       = "dev",
-    [string] $OutDir      = "$PSScriptRoot\workitem-results"
+    [string] $OutDir      = "$PSScriptRoot\workitem-results",
+    # Extra file parameters beyond inputFile/params/outputFile — e.g. an xref target a
+    # command attaches. Key = the activity.json parameter name (e.g. "xrefFile"), value =
+    # local path to upload. Uploaded under that parameter's own declared localName, so
+    # params.json can reference it by the same filename the WorkItem sees.
+    [hashtable] $ExtraFiles = @{}
 )
 
 $ErrorActionPreference = "Stop"
@@ -74,6 +80,14 @@ $arguments = @{
 if (Test-Path $ParamsJson) {
     Upload-ToOSS $token $bucketKey "params.json" $ParamsJson | Out-Null
     $arguments["params"] = @{ url = Get-OSSSignedUrl $token $bucketKey "params.json" "read" }
+}
+
+foreach ($paramName in $ExtraFiles.Keys) {
+    $localFile = (Resolve-Path $ExtraFiles[$paramName]).Path  # same FileStream/CWD risk as $InputDwg above
+    $ossName   = $activity.parameters.$paramName.localName
+    if (-not $ossName) { $ossName = $paramName }
+    Upload-ToOSS $token $bucketKey $ossName $localFile | Out-Null
+    $arguments[$paramName] = @{ url = Get-OSSSignedUrl $token $bucketKey $ossName "read" }
 }
 
 $workItemId = Submit-WorkItem $token "$Owner.$($activity.id)" $Alias $arguments

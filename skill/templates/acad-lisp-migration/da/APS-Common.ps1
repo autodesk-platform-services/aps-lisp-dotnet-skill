@@ -44,7 +44,13 @@ function Get-APSToken {
 function Get-DANickname($token) {
     $r = Invoke-RestMethod -Uri "$DA_BASE/forgeapps/me" -Method GET `
         -Headers @{ Authorization = "Bearer $token" }
-    return $r
+    # Observed response shape is a bare JSON string ("<value>"), not { "id": "<value>" } as
+    # the APS docs/earlier assumption suggested — Invoke-RestMethod then deserializes it to
+    # a plain .NET string with no .id property. Every caller reading $result.id on that gets
+    # $null silently (no error), which is the actual root cause of nicknames resolving empty.
+    # Normalize here so every caller gets a consistent bare string either way.
+    if ($r -is [string]) { return $r }
+    return $r.id
 }
 
 function Set-DANickname($token, $nickname) {
@@ -54,8 +60,10 @@ function Set-DANickname($token, $nickname) {
             -Headers @{ Authorization = "Bearer $token"; "Content-Type" = "application/json" } `
             -Body $body | Out-Null
         Write-Host "  Nickname set to '$nickname'" -ForegroundColor Green
+        return $true
     } catch {
         Write-Host "  Nickname PATCH failed: $_" -ForegroundColor Yellow
+        return $false
     }
 }
 
@@ -67,23 +75,30 @@ function Set-DANickname($token, $nickname) {
 # returns the nickname callers should actually use.
 function Resolve-DANickname($token, $requestedNickname) {
     $current = Get-DANickname $token
-    # GET /forgeapps/me returns { "id": "<value>" } — but when no custom nickname has ever
-    # been registered, <value> defaults to your raw APS_CLIENT_ID, not blank/null. Comparing
-    # against $env:APS_CLIENT_ID (not just truthiness) is the only way to tell "has a real
-    # nickname" apart from "still on the default identity".
-    $hasRealNickname = $current.id -and ($current.id -ne $env:APS_CLIENT_ID)
+    # Get-DANickname always returns a bare string now — but when no custom nickname has
+    # ever been registered, that string defaults to your raw APS_CLIENT_ID, not blank/null.
+    # Comparing against $env:APS_CLIENT_ID (not just truthiness) is the only way to tell
+    # "has a real nickname" apart from "still on the default identity".
+    $hasRealNickname = $current -and ($current -ne $env:APS_CLIENT_ID)
     if ($hasRealNickname) {
-        Write-Host "  Existing nickname: '$($current.id)'" -ForegroundColor Cyan
-        if ($current.id -ne $requestedNickname) {
+        Write-Host "  Existing nickname: '$current'" -ForegroundColor Cyan
+        if ($current -ne $requestedNickname) {
             Write-Host "  (requested '$requestedNickname' ignored — already registered)" -ForegroundColor Yellow
         }
-        return $current.id
+        return $current
     }
     if (-not $requestedNickname) {
         throw "No forgeapps nickname is registered yet, and none was provided. Pass -Owner <nickname>."
     }
-    Set-DANickname $token $requestedNickname
-    return $requestedNickname
+    $patched = Set-DANickname $token $requestedNickname
+    if ($patched) {
+        return $requestedNickname
+    }
+    # PATCH failed (e.g. "already has resources") — $current (fetched above, before the
+    # PATCH attempt) is still accurate, since nothing changed. No need to re-GET: this is
+    # the nickname/identity every downstream bundle/activity/workitem reference must use.
+    Write-Host "  Nickname did not actually change — using registered identity '$current' instead of requested '$requestedNickname'." -ForegroundColor Yellow
+    return $current
 }
 
 # DELETE /forgeapps/me — wipes EVERY bundle, activity, and the nickname itself for this
@@ -107,6 +122,21 @@ function Invoke-DA($token, $method, $path, $body = $null) {
     if ($body) { $params.Body = ($body | ConvertTo-Json -Depth 10) }
     try   { return Invoke-RestMethod @params }
     catch { throw "DA $method $path -> $($_.Exception.Response.StatusCode): $($_.ErrorDetails.Message)" }
+}
+
+# GET appbundles/activities responses are paginated — { data: [...], paginationToken: "..." }.
+# A single Invoke-DA call only returns one page (observed: ~20 items), silently truncating
+# the real list. Follow paginationToken until it's absent to get everything.
+function Get-DAAllPages($token, $path) {
+    $all = @()
+    $page = $null
+    do {
+        $p = if ($page) { "$path`?page=$page" } else { $path }
+        $r = Invoke-DA $token GET $p
+        $all += $r.data
+        $page = $r.paginationToken
+    } while ($page)
+    return $all
 }
 
 # AppBundle

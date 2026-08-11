@@ -27,15 +27,21 @@ if (-not $Confirm) {
 
 $token  = Get-APSToken
 $before = Get-DANickname $token
-$bundles    = @(try { (Invoke-DA $token GET "appbundles").Data } catch { @() })
-$activities = @(try { (Invoke-DA $token GET "activities").Data }  catch { @() })
+# GET appbundles/activities return the PUBLIC catalog (every publicly-published activity
+# across APS, including other teams'/products' official entries), not just this identity's
+# own resources — and only one page at a time. Fetch every page, then filter to only the
+# entries actually prefixed with this identity, so the count below reflects what DELETE
+# /forgeapps/me will actually remove, not an unrelated public-catalog page-1 snapshot.
+$prefix     = "$before."
+$bundles    = @(try { Get-DAAllPages $token "appbundles"  } catch { @() }) | Where-Object { $_.id -like "$prefix*" }
+$activities = @(try { Get-DAAllPages $token "activities" } catch { @() }) | Where-Object { $_.id -like "$prefix*" }
 
 Write-Host ""
 Write-Host "############################################################" -ForegroundColor Red
 Write-Host "#  WARNING: DESTRUCTIVE, IRREVERSIBLE OPERATION             #" -ForegroundColor Red
 Write-Host "#  DELETE /forgeapps/me wipes ALL of the following:         #" -ForegroundColor Red
 Write-Host "############################################################" -ForegroundColor Red
-Write-Host "  Identity        : $($before.id)" -ForegroundColor Yellow
+Write-Host "  Identity        : $before" -ForegroundColor Yellow
 Write-Host "  AppBundles      : $($bundles.Count)"  -ForegroundColor Yellow
 Write-Host "  Activities      : $($activities.Count)" -ForegroundColor Yellow
 Write-Host "  Nickname itself : will be un-registered" -ForegroundColor Yellow
