@@ -1,4 +1,8 @@
 {
+  "name": "aps-lisp-dotnet-skill",
+  "owner": {
+    "name": "Autodesk Platform Services"
+  },
   "plugins": [
     {
       "name": "lisp-to-dotnet",
