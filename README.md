@@ -1,5 +1,8 @@
 # lisp-to-dotnet
 
+![One Skill. One LISP. One Automation.](APS-LSP-NET-SKILL.png)
+*Image credit: AI-assisted illustration, reviewed by the author. Product screenshots are from the actual workflow; flange rendering is illustrative.*
+
 Claude Code skill that migrates AutoLISP (`.lsp`) plugins into AutoCAD .NET C# for **Design Automation**. AutoLISP's COM/ActiveX runtime (`vla-`/`vlax-`) doesn't exist in the headless DA engine — this skill reads a `.lsp` file, maps every command/entity op/DXF access/COM call to its .NET equivalent, and generates a full DA-ready plugin: source, unit tests, `accoreconsole` integration tests, and a deployable bundle.
 
 Details: [`skill/SKILL.md`](skill/SKILL.md) · Architecture/status: [`SPEC.md`](SPEC.md)
