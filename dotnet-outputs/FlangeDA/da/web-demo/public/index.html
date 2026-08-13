@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FlangeDA hole-pattern demo</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  .banner { background: #fff3cd; border: 1px solid #e0c36a; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1.5rem; }
+  .field { margin-bottom: 0.9rem; display: flex; flex-direction: column; gap: 0.2rem; }
+  .field label { font-weight: 600; }
+  .field small { color: #666; }
+  input[type="text"], input[type="number"], input[type="file"] { padding: 0.4rem; font-size: 1rem; }
+  button { padding: 0.6rem 1.2rem; font-size: 1rem; cursor: pointer; }
+  #status { margin-top: 1rem; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+  <h1>FlangeDA — hole pattern (Design Automation demo)</h1>
+  <div class="banner">
+    Local, unauthenticated demo server. No login, no rate limiting, no hardening —
+    stands in for Flange.dcl's stubbed hole-pattern dialog. Not production-ready.
+  </div>
+
+  <form id="runForm">
+    <div class="field">
+      <label for="inputDwg">Input drawing (.dwg)</label>
+      <small>Any blank/template drawing — FLANGE draws entirely from the parameters below and never reads pre-existing entities.</small>
+      <input type="file" id="inputDwg" name="inputDwg" accept=".dwg" required />
+    </div>
+
+    <div id="paramsForm"><!-- populated from /api/schema --></div>
+
+    <button type="submit">Run FLANGE</button>
+  </form>
+
+  <div id="status"></div>
+
+  <script src="client.js"></script>
+</body>
+</html>

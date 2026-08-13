@@ -2,61 +2,47 @@
 
 ## Problem
 
-Visual LISP (`vlax-*`, `vla-*`, COM/ActiveX calls) does not run in Design Automation — the COM runtime is absent from headless `accoreconsole`. Basic AutoLISP (`entget`, `ssget`, `entmod`) does run in DA, but most real-world LISP plugins use Visual LISP COM calls and are blocked from the cloud. Migrating to the typed .NET API is the only path to Design Automation for those plugins — and it removes the C# syntax barrier for LISP developers making that jump.
+Visual LISP (`vlax-*`, `vla-*`, COM/ActiveX calls) does not run in Design Automation — the COM runtime is absent from headless `accoreconsole`. Basic AutoLISP (`entget`, `ssget`, `entmod`) does run in DA, but most real-world LISP plugins use Visual LISP COM calls and are blocked from the cloud. Migrating to the typed .NET API is the only path to Design Automation for those plugins.
 
-## What This Is
+## Objective
 
-A Claude Code skill (`/lisp-to-dotnet`) that reads an AutoLISP file, builds a structured analysis of every pattern it uses (the **Discovery Table**), then generates a complete, production-ready AutoCAD .NET C# plugin for **Design Automation** — and only Design Automation. There is no desktop/interactive output; every migrated command is a parameterized, non-interactive entry point. This scope decision (made after the initial multi-target version, preserved on the `desktop` git branch) removes the ambiguity of trying to serve two shapes of output from one project and keeps every migration consistent.
+A Claude Code skill (`/lisp-to-dotnet`) that reads an AutoLISP file and generates a complete, production-ready AutoCAD .NET C# plugin for Design Automation — source, unit tests, `accoreconsole` integration tests, and a deployable bundle. Not a fixed template for one entity shape: the analysis step (a **Discovery Table**) is generic, so it adapts to whatever the LISP file actually contains.
 
-It is **not** a fixed template for one entity type — the Discovery Table procedure is generic, so it adapts to whatever the LISP file actually contains (selection sets, DXF group codes, VLA/COM calls, file I/O, symbol table access, etc.) rather than assuming a specific shape.
+**Expected outcome:** a developer with a legacy LISP plugin and no prior AutoCAD .NET experience can run the skill and get a working, DA-deployable C# project — not a partial scaffold that still needs hand-finishing, and not code that merely compiles without ever being proven against real APS Design Automation.
+
+## Anti-goals
+
+- **Not a desktop/interactive tool.** Design Automation only, by construction — every migrated command is parameterized and non-interactive. No desktop output, no `--target` split. (Prior multi-target version preserved on the `desktop` git branch if that scope is ever needed again.)
+- **Not a dialog *renderer* — but DCL values are still real input, not dead code.** DCL mechanics (`load_dialog`/`new_dialog`/`action_tile`/etc.) are stubbed, never turned into broken UI. But every value a DCL tile gathered is treated as interactive input, same as `getpoint`/`getkword` — extracted into the same `<CommandName>Input` record and `params.schema.json` contract. The dialog's actual replacement — a static HTML form + Node/Python server — is a follow-on build phase on top of this skill's own output, not a disconnected handoff. Demonstrated end-to-end with `FlangeDA`.
+- **Not a shared, compiled CLI.** Per-migration PowerShell scripts (`da/*.ps1`), not one central tool — a real APS bug's fix should be a visible edit to a script the developer already has open, not a separate CLI build/release cycle.
+- **Not a guesser.** Never invents a plausible-sounding .NET API for a COM call — capability gaps get verified (DLL reflection, or the original IDL source) and logged clearly, not papered over.
+
+## Structure
+
+```
+skill/
+  SKILL.md              ← the skill itself: procedure, guardrails, pattern mapping
+  references/            ← detail loaded on demand, kept out of SKILL.md's line budget
+    patterns.md            LISP → C# mapping tables (selection sets, DXF codes, VLA/COM, file I/O)
+    examples.md             worked before/after code examples
+    da-setup.md             what Claude asks for vs. what the developer fills in (env paths, credentials)
+  templates/
+    acad-lisp-migration/  ← the `dotnet new` template — scaffolds the full generated project
+```
+
+Everything under `skill/` is the deployable unit (installed via `/plugin install` or copied to `~/.claude/skills/`). Everything else in this repo — `dotnet-outputs/` (worked examples), `lisps/` (test corpus), `evals/` (quality gate) — supports developing and validating the skill, but isn't part of what a user installs.
 
 ## Architecture
 
-1. **Guardrail check** — scans for DCL dialogs first. If found, the skill refuses to generate broken UI code and instead flags the dialog logic as an explicit v2 TODO, migrating everything else. DCL/WPF replacement is out of scope for v1 by design (needs its own design session).
-2. **Design Automation Guardrail** — applies to *every* command, always: any interactive input (`getpoint`/`getstring`/`getfiled`/`getkword`/etc.) becomes a field on a `Models/<CommandName>Input.cs` record read from `params.json`, never an interactive prompt. A DA Activity has no display, no message pump, no live console — code that silently relies on interactive input hangs or fails inside a cloud worker rather than erroring cleanly at build time.
-3. **Discovery Table** — every command, helper, entity access, DXF read/write, and COM call in the file is catalogued with its .NET equivalent before any code is written.
-4. **Scaffold** — a `dotnet new` template (`acad-lisp-migration`) generates the full project structure (csproj, test projects, bundle manifest, DA deployment scripts) with the correct AutoCAD version, TFM, and NuGet version already resolved — no hand-editing of boilerplate. One package everywhere: `AutoCAD.NET.Core` (never the full `AutoCAD.NET`, which crashes both `accoreconsole` and the real DA engine with `0xC0000005` — there's no desktop target to justify it).
-5. **Code generation** — Claude fills the generated stubs with the actual migrated logic, split into pure/testable model code and AutoCAD-dependent service code. Command output/logging uses `Editor.WriteMessage`, never `Console.WriteLine` — the real DA cloud engine isn't guaranteed to capture bare stdout the way `accoreconsole` does locally, and `WriteMessage` is what actually lands in the downloadable WorkItem report.
-6. **Tests** — two tiers: xUnit for pure logic (no AutoCAD host needed), and NUnit + ExtentReports self-hosted inside `accoreconsole` for anything touching the database (following the [coreconsolerunner](https://github.com/ADN-DevTech/coreconsolerunner) pattern — commands write, tests only read). A dev-only seed-generation command (e.g. `HBSEED`) plus a headless `accoreconsole` script (no `/i`, `FILEDIA 0`, scripted `QSAVE`) lets a developer produce a real seed `.dwg` for DA testing without ever opening AutoCAD desktop.
-7. **Bundle + real DA deployment** — `PackageContents.xml` and a bundle-assembly script produce a DA-ready `.bundle`, per the Autodesk Autoloader spec used by APS AppBundles. `da/Deploy-And-Test-DA.ps1` deploys the bundle + activity to real APS Design Automation and submits an actual WorkItem — not a simulation. Credentials never pass through Claude or the conversation: `da/.env` (gitignored; `.env.example` tracked) holds `APS_CLIENT_ID`/`APS_CLIENT_SECRET`/`APS_NICKNAME`, loaded by `Import-DotEnv` at the top of every DA script, and the developer runs the deployment scripts themselves.
+1. **DCL Guardrail** — scans for dialog code first; refuses rather than generating broken UI.
+2. **Design Automation Guardrail** — every interactive input (`getpoint`/`getstring`/`getfiled`/`getkword`) becomes a `params.json`-backed field, never a live prompt.
+3. **Discovery Table** — every command, entity access, DXF read/write, and COM call catalogued with its .NET equivalent before any code is written.
+4. **Scaffold** — `dotnet new acad-lisp-migration` generates the full project structure (csproj, tests, bundle manifest, DA scripts) with the correct AutoCAD version/TFM/NuGet already resolved.
+5. **Code generation** — pure/testable model code separated from AutoCAD-dependent service code; `Editor.WriteMessage` for all output/logging, never `Console.WriteLine`.
+6. **Tests** — xUnit for pure logic, NUnit self-hosted inside `accoreconsole` for anything touching the database.
+7. **Bundle + real DA deployment** — `PackageContents.xml` + `da/Deploy-And-Test-DA.ps1` deploy to real APS Design Automation and submit an actual WorkItem. Credentials never pass through Claude — `da/.env` is filled in by the developer, gitignored.
+8. **Machine-readable params contract** — `da/params.schema.json` mirrors the input record as JSON Schema, for any non-.NET consumer.
 
-**A real APS quirk worth documenting because it cost real debugging time:** `GET /forgeapps/me` returns your raw `APS_CLIENT_ID` as the identity when no custom nickname has ever been registered — not `null`/blank. A naive truthiness check misreads that default as "already has a nickname." `Resolve-DANickname` (in `da/APS-Common.ps1`) compares against `$env:APS_CLIENT_ID` explicitly, and every downstream reference (bundle, activity, WorkItem) is qualified as `<nickname>.<id>+<alias>` — bare IDs only work for direct-ownership calls, not cross-references. `da/Reset-APSApp.ps1 -Confirm` is the deliberate, warning-gated clean-slate reset for when resource state gets confused across runs.
+## Status
 
-8. **Machine-readable params contract** — every migration with a `Models/<CommandName>Input.cs` record also emits `da/params.schema.json`, a plain JSON Schema mirror of it (field name, type, default, description). Lets any non-.NET consumer — a hand-built HTML form, a different tool — know the `params.json` contract without parsing C#. First use case: a planned v2 pattern mapping LISP DCL dialogs to a static HTML form that feeds this schema.
-
-## Validated So Far
-
-**The eval suite (`evals/evals.json`) is the primary quality gate** — 3 fixed cases run by spawning an isolated subagent that genuinely invokes the Skill tool (not an improvised walkthrough), graded against concrete filesystem/build assertions:
-
-| Case | File | Focus | Result |
-|---|---|---|---|
-| 1 | `gpmain.lsp` | Basic commands, parameterized point/distance input, `(alert...)` correctly not mistaken for DCL | **6/6 assertions pass**, plus a real `accoreconsole` run (6/6 NUnit tests), a real bundle built, and a genuine `CS0234` bug (`Application` vs `Core.Application`) self-found and self-fixed in the template *and* SKILL.md during the run |
-| 2 | `HATCHB.lsp` | VLA-heavy: `vla-AddLine/Circle/Arc/Ellipse`, `addLightweightPolyline`+bulge, `pedit`/`ucs`/`UNDO` macro sequences correctly flagged as v2 TODOs, area computation via typed try/catch | Automated subagent run stopped early (cost management); **manually completed and validated end-to-end instead — see HatchBDA below** |
-| 3 | `mstxt.lsp` | Real DCL (`load_dialog`/`new_dialog`) — must refuse before generating any code | **4/4 assertions pass** — refusal fires before scaffolding, explicit out-of-scope statement, path forward offered |
-
-**HatchBDA is the deepest validation this skill has had — a real, live APS Design Automation WorkItem, not just a local build.** Starting from `HATCHB.lsp` (Jimmy Bergmark/JTB World — recreates HATCH boundaries as typed line/arc/circle/ellipse/polyline entities), the migration was carried all the way through:
-- `dotnet build` clean, 0 errors, all 5 `vla-Add*` calls mapped to typed entity creation
-- A real APS app, deployed via `da/Deploy-And-Test-DA.ps1`: AppBundle uploaded, Activity created, a real WorkItem (`59ce1bdb...`) submitted against the actual cloud engine and returned `status: success` in ~10 seconds
-- `result.dwg` downloaded and manually opened — **boundary entities confirmed created correctly**, not just "the API returned success"
-
-Getting there surfaced (and fixed, in both the instance and the template — self-maintaining-skill convention) real APS integration bugs that only show up against the live service, not in any local test: unqualified `activityId` references, the `GET /forgeapps/me` default-identity gotcha above, and an `.env`-loading ordering bug in the deployment script's own parameter defaults. This is the strongest evidence so far that the skill's output is genuinely DA-deployable, not just DA-shaped.
-
-`dotnet-outputs/GardenPath` and `dotnet-outputs/ViewsIO` predate the DA-only pivot and reflect the old desktop-oriented shape — kept for historical reference, not as current expected output. `dotnet-outputs/HatchBDA` is the current DA-only worked example.
-
-**Two more independent real APS Design Automation successes since HatchBDA**, run against real customer LISP (Gil Cordle, LJA): `AcresDA` (from `Gil_Cordle_ACRES.lsp`) and `FlangeDA` (from `Flange.lsp`'s non-dialog logic, `mode=pat` hole-pattern branch) each submitted a real WorkItem and got a result back. AcresDA's testing surfaced two generalizable AutoCAD .NET Core native-crash gotchas (now in `SKILL.md`'s Known Edge Cases): a `Region`/`using` double-free, and `Hatch.AppendLoop` needing `HatchLoopTypes.External`. Three independent real deploys now, not one.
-
-**Tier 1 corpus sweep (2026-08-04):** a Discovery-Table-only dry run (no scaffolding) across all 62 non-fixture files in `lisps/` — 62/62 produced a table, no silent skips. Surfaced real corpus data-quality issues (several files with genuinely corrupted/truncated source, verified against actual bytes, not hallucinated) and out-of-scope-beyond-DCL edge cases (e.g. a file driving an external `CAO.dbConnect` COM server, not core AutoCAD). Full migration (Tier 2) and real-deploy (Tier 3) passes on a representative sample are next.
-
-**Repo is now on GitHub (internal visibility):** [github.com/autodesk-platform-services/aps-lisp-dotnet-skill](https://github.com/autodesk-platform-services/aps-lisp-dotnet-skill), with a WIP `README.md` and before/after demo media.
-
-**Explored and ruled out:** AutoCAD's built-in Action Recorder (`ACTRECORD`/`ACTSTOP`/playback via macro name) was tested as a way to record LISP command interactions once and replay them against migrated .NET commands for automated equivalence checking. Not viable — Action Recorder macros are bound to the *provenance* of the command they were recorded against (LISP vs. compiled/managed), not just its name; replaying against a same-named .NET command fails with "Lisp Command Missing." Not applicable to DA-only migrations anyway, since there's no interactive session to record against.
-
-## Known Gaps
-
-- **Sample breadth — in progress.** Tier 1 (Discovery-Table dry run, all 62 corpus files) is done; Tier 2 (full migration on a representative sample) and Tier 3 (real DA deploy on a subset) are next.
-- **Eval case 2 needs a from-scratch automated re-run** to confirm the skill alone (no manual intervention) reproduces the HatchBDA result end-to-end — the current validation combined an automated subagent run with manual completion.
-- **A shared DA deployment CLI was considered and explicitly deferred.** Per-migration PowerShell scripts (`da/*.ps1`) stay the mechanism: when a real APS bug surfaces, the fix is a direct, visible edit to a script the developer already has open, not a separate CLI build/release cycle.
-
-## Bottom Line
-
-The core pipeline — analyze, scaffold, generate, test, package, **deploy to real APS Design Automation and get a successful WorkItem back** — works end-to-end, verified three times independently against the actual Autodesk cloud service (HatchBDA, AcresDA, FlangeDA), not just local builds. A corpus-wide dry run (62 files) confirms the analysis step generalizes beyond hand-picked samples. What's left is depth on that breadth (Tier 2/3 full migrations + deploys) rather than fixing the core mechanism.
+Validated via the eval suite (`evals/evals.json`), a 62-file corpus sweep, 7 full migrations, and 5 independent real APS Design Automation WorkItem successes. Specific findings, fixes, and edge cases live in `SKILL.md`'s Known Edge Cases — not duplicated here.

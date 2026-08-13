@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ApplicationPackage SchemaVersion="1.0"
+  AutodeskProduct="AutoCAD"
+  ProductType="Application"
+  AppVersion="1.0.0"
+  ProductCode="{00000000-0000-0000-0000-000000000000}"
+  Name="FlangeDA"
+  Description="FlangeDA AutoCAD Plugin"
+  Author="Your Name">
+  <CompanyDetails Name="Your Company" Url="https://yourcompany.com" Email="support@yourcompany.com" />
+  <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R26.0" SeriesMax="R26.0" />
+  <Components Description="FlangeDA">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R26.0" SeriesMax="R26.0" SupportPath="./Contents/Win64" />
+    <ComponentEntry
+      AppName="FlangeDA"
+      AppType=".NET"
+      Version="1.0.0"
+      ModuleName="./Contents/Win64/FlangeDA.dll"
+      LoadOnAutoCADStartup="True">
+      <Commands GroupName="FlangeDA_Commands">
+        <Command Local="FLANGE" Global="FLANGE" />
+      </Commands>
+    </ComponentEntry>
+  </Components>
+</ApplicationPackage>

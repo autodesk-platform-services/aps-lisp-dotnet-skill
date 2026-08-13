@@ -1,0 +1,33 @@
+{
+  "id": "FlangeDaActivity",
+  "description": "Recreates the user-defined hole-pattern branch of C:Flange (Flange.lsp) — draws a circular or angled/elliptical bolt-hole pattern on a pitch circle diameter, headless.",
+  "engine": "Autodesk.AutoCAD+26_0",
+  "commandLine": [
+    "$(engine.path)\\accoreconsole.exe /i \"$(args[inputFile].path)\" /al \"$(appbundles[FlangeDA].path)\" /s \"$(settings[script].path)\""
+  ],
+  "parameters": {
+    "inputFile": {
+      "verb": "get",
+      "description": "Any blank/template drawing. FLANGE draws entirely from params.json and never reads pre-existing entities, so no special seed drawing is required.",
+      "required": true,
+      "localName": "input.dwg"
+    },
+    "params": {
+      "verb": "get",
+      "description": "HolePatternInput JSON — Offset/FlangeTangentAngleDegrees/PatternDiameter/NumberOfHoles/HoleDiameter/CenterX/CenterY/RotationAngleDegrees. See Models/HolePatternInput.cs and params.schema.json.",
+      "required": true,
+      "localName": "params.json"
+    },
+    "outputFile": {
+      "verb": "put",
+      "description": "Same drawing, saved in place after drawing the hole pattern. Shares input.dwg's localName deliberately — QSAVE writes back to the file accoreconsole already has open.",
+      "required": true,
+      "localName": "input.dwg"
+    }
+  },
+  "settings": {
+    "script": {
+      "value": "FLANGE\nQSAVE\n"
+    }
+  }
+}

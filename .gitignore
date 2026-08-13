@@ -25,3 +25,6 @@ Ignore/
 dotnet-outputs/**/da/*.dwg
 dotnet-outputs/**/da/*.zip
 dotnet-outputs/**/da/workitem-results/
+
+# Node.js dependencies — never commit, package.json/package-lock.json are enough to reinstall
+node_modules/

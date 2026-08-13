@@ -6,9 +6,10 @@ Details: [`skill/SKILL.md`](skill/SKILL.md) · Architecture/status: [`SPEC.md`](
 
 ## Validated
 
-- **3 independent real APS Design Automation deploys** — HatchBDA, AcresDA, FlangeDA — each submitted a real WorkItem against the live cloud service and got a result back, not simulated.
-- **Corpus-wide dry run**: 62/62 real-world `.lsp` files (jtbworld.com corpus) produced a correct Discovery Table, no silent skips.
-- **7/7 full migrations** (scaffold → codegen → build → unit tests, representative sample spanning VLA/COM, file I/O, heaviest interactive-input file in the corpus) — all passing, several real bugs found and fixed in the skill itself along the way (never-let-an-exception-escape-a-command, missing `using` directives, `InternalsVisibleTo` gaps).
+- **5 independent real APS Design Automation deploys** — not simulated, each a real WorkItem against the live cloud service.
+- **62/62 real-world `.lsp` files** (jtbworld.com corpus) produced a correct Discovery Table, no silent skips.
+- **7/7 full migrations** passed (scaffold → codegen → build → unit tests) — found and fixed 3 real bugs in the skill itself along the way.
+- **One-shot install** — `/plugin marketplace add` → `/plugin install` — tested end-to-end on a fresh machine.
 
 ## Install
 
@@ -22,12 +23,34 @@ For using the skill as-is — no cloning, no manual copying:
 
 `/reload-plugins` is required after install — without it the skill won't show up in the current session.
 
-Then:
+## Usage
 
-```sh
-dotnet new install skill/templates/acad-lisp-migration
-claude "/lisp-to-dotnet <your-file>.lsp"
-```
+1. Create a working folder and put your `.lsp` file in it — and its `.dcl`, if the project has one:
+
+   ```
+   mkdir C:\LispToDotnet
+   cd /d C:\LispToDotnet
+   ```
+
+2. Launch Claude Code from that folder:
+
+   ```
+   claude
+   ```
+
+3. Install the template (one-time):
+
+   ```sh
+   dotnet new install skill/templates/acad-lisp-migration
+   ```
+
+4. Invoke the skill, naming the `.lsp` file — mention the `.dcl` too if the project has one:
+
+   ```
+   /lisp-to-dotnet your-file.lsp
+   ```
+
+The skill takes it from there: DCL check, Discovery Table, scaffold, code generation, build, tests — prompting you at each side-effecting step (build/test/deploy commands) rather than running them silently.
 
 ## Setup (for contributors)
 
@@ -46,8 +69,8 @@ Edit under `skill/`, then re-copy to `~/.claude/skills/lisp-to-dotnet` to pick u
 
 ![Discovery Table overview](LISP-NET-SKILL.png)
 
-- `before.mp4` — desktop AutoLISP, interactive
-- `after.mp4` — Design Automation, headless, cloud
+- [before.mp4](before.mp4) — desktop AutoLISP, interactive
+- [after.mp4](after.mp4) — Design Automation, headless, cloud
 
 Design-Automation-only by construction — every migrated command is parameterized and non-interactive, no desktop/interactive output.
 

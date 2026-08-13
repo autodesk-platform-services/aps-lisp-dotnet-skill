@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HolePatternInput",
+  "description": "Params contract for FLANGE's user-defined hole-pattern branch. Mirrors Models/HolePatternInput.cs field-for-field — regenerate this file whenever that record changes.",
+  "type": "object",
+  "properties": {
+    "Offset": {
+      "type": "boolean",
+      "default": true,
+      "description": "Draw the first hole offset by half the angular spacing instead of at angle 0. Mirrors the \"offset\" dialog tile (\"1\" = offset, \"0\" = on-centre)."
+    },
+    "FlangeTangentAngleDegrees": {
+      "type": "number",
+      "default": 0.0,
+      "description": "Flange tilt angle in degrees. 0 draws the flat pattern (circles); non-zero draws the angled/tilted pattern (ellipses). Mirrors the \"ftang\" dialog tile."
+    },
+    "PatternDiameter": {
+      "type": "number",
+      "description": "Pitch circle diameter the holes sit on. Mirrors the \"ddpcd\" input_pattern dialog tile."
+    },
+    "NumberOfHoles": {
+      "type": "integer",
+      "description": "Number of holes in the pattern. Mirrors the \"num\" input_pattern dialog tile."
+    },
+    "HoleDiameter": {
+      "type": "number",
+      "description": "Diameter of each hole. Mirrors the \"holedia\" input_pattern dialog tile."
+    },
+    "CenterX": {
+      "type": "number",
+      "description": "X of the pattern centre point. Mirrors the original interactive \"Pick centre of pcd.\" getpoint."
+    },
+    "CenterY": {
+      "type": "number",
+      "description": "Y of the pattern centre point. Mirrors the original interactive \"Pick centre of pcd.\" getpoint."
+    },
+    "RotationAngleDegrees": {
+      "type": "number",
+      "default": 0.0,
+      "description": "Rotation applied to the finished pattern about the centre point, in degrees. Replaces the original angled-branch \"ROTATE (catch) pick_pcd pause\" — pause is live drag input with no DA equivalent, so a fixed angle takes its place. 0 = no rotation."
+    }
+  },
+  "required": ["PatternDiameter", "NumberOfHoles", "HoleDiameter", "CenterX", "CenterY"]
+}

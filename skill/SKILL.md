@@ -98,12 +98,16 @@ Also check for a `.dcl` file with the same base name in the same folder.
 > DCL migration is **out of scope for v1** — replacing DCL with WPF/Palette requires a design session to decide layout, data binding, and user flow.
 >
 > **What you can do now:**
-> - Extract the non-dialog logic (commands, entity ops, file I/O) and I'll migrate those to .NET.
-> - Flag DCL calls as `// TODO v2: replace with WPF dialog` stubs in the output.
+> - Extract the non-dialog logic (commands, entity ops, file I/O) and I'll migrate those to .NET, with every value the dialog gathered becoming a typed `params.json` field.
+> - Flag the DCL mechanics themselves (`load_dialog`/`new_dialog`/`action_tile`/etc.) as `// TODO v2: replace with WPF dialog` stubs — the *values* those tiles held are not stubbed, only the dialog-display mechanics.
 >
 > Reply "migrate non-dialog code only" to proceed with partial migration, or wait for v2.
 
-If the user explicitly says "migrate non-dialog code only", proceed but replace every DCL call with a `// TODO v2` stub — never generate DCL-equivalent C# for dialog code.
+If the user explicitly says "migrate non-dialog code only", proceed like this:
+
+- **The DCL tile values are interactive input, same as `getpoint`/`getkword`/`getstring` — not dead code.** Read the `.dcl` file alongside the `.lsp` file. For every tile that feeds a value the underlying command logic actually uses (`edit_box`, `radio_button`, `popup_list`, `toggle`), add a field to the `<CommandName>Input` record, one field per tile, doc-commented `/// Mirrors the "<tile-key>" dialog tile.` — same convention as any other interactive input, and the same convention used for `getpoint`-derived fields in the same record. Confirmed real pattern: `FlangeDA`'s `HolePatternInput.cs` (fields `Offset`, `FlangeTangentAngleDegrees`, `PatternDiameter`, `NumberOfHoles`, `HoleDiameter` map directly to the `offset`/`ftang`/`ddpcd`/`holedia` DCL tile keys).
+- **Only the DCL mechanics themselves get stubbed** — `load_dialog`/`new_dialog`/`start_dialog`/`action_tile`/`set_tile`/`mode_tile`/`term_dialog`/`unload_dialog` calls become `// TODO v2: replace with WPF dialog` (or are simply omitted, since there's no dialog to show). The values those calls gathered are never stubbed — they're real, typed, tested fields, exactly like any other Design Automation Guardrail input.
+- **The dialog's actual replacement is a separate Web UI layer, not this skill's output.** A subsequent step converts the DCL tiles into a static HTML form plus a Node/Python server, using this migration's own `da/params.schema.json` as the contract — the form's submission becomes the `params.json` this plugin already expects. That's a distinct build phase using the same LSP-to-.NET skill's output as its foundation, not a disconnected handoff to someone else's tool. Demonstrated end-to-end with `FlangeDA`.
 
 ## Design Automation Guardrail — Applies to Every Command, Always
 
