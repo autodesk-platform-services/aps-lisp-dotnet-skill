@@ -38,19 +38,13 @@ For using the skill as-is — no cloning, no manual copying:
    claude
    ```
 
-3. Install the template (one-time):
-
-   ```sh
-   dotnet new install skill/templates/acad-lisp-migration
-   ```
-
-4. Invoke the skill, naming the `.lsp` file — mention the `.dcl` too if the project has one:
+3. Invoke the skill, naming the `.lsp` file — mention the `.dcl` too if the project has one:
 
    ```
    /lisp-to-dotnet your-file.lsp
    ```
 
-The skill takes it from there: DCL check, Discovery Table, scaffold, code generation, build, tests — prompting you at each side-effecting step (build/test/deploy commands) rather than running them silently.
+The skill takes it from there: DCL check, Discovery Table, `dotnet new` template registration (one-time, resolved automatically to wherever the plugin is actually installed — no path to guess), scaffold, code generation, build, tests — prompting you at each side-effecting step (build/test/deploy commands) rather than running them silently.
 
 ## Setup (for contributors)
 
@@ -69,11 +63,15 @@ Edit under `skill/`, then re-copy to `~/.claude/skills/lisp-to-dotnet` to pick u
 
 ![Discovery Table overview](LISP-NET-SKILL.png)
 
-- [before.mp4](before.mp4) — desktop AutoLISP, interactive
-- [after.mp4](after.mp4) — Design Automation, headless, cloud
+GitHub doesn't inline-preview committed video files — click through to play:
+
+- ▶ [before.mp4](before.mp4) — desktop AutoLISP, interactive
+- ▶ [after.mp4](after.mp4) — Design Automation, headless, cloud
 
 Design-Automation-only by construction — every migrated command is parameterized and non-interactive, no desktop/interactive output.
 
 ## Credits
+
+Written with Claude Code — human-directed, human-reviewed, and tested end-to-end against real APS Design Automation, not accepted on faith. Every real bug in this skill's own guidance (see `SKILL.md`'s Known Edge Cases) was found through actual testing, not by construction.
 
 The 64-file test corpus (`lisps/`) that this skill was validated against is real-world AutoLISP by Jimmy Bergmark, [JTB World](https://jtbworld.com/autolisp-visual-lisp) — decades of genuinely useful, freely-shared LISP routines, and reuse is explicitly welcomed on the site itself: *"Please feel free to be inspired, cut&paste or if you have any feedback, questions or looking for an AutoLISP programmer for small or large projects go here."* Several of the corpus's real bugs and edge cases (found and fixed as part of validating this skill) trace back to these files — thank you for keeping them public.
