@@ -4,6 +4,8 @@ Claude Code skill that migrates AutoLISP (`.lsp`) plugins into AutoCAD .NET C# f
 
 Details: [`skill/SKILL.md`](skill/SKILL.md) · Architecture/status: [`SPEC.md`](SPEC.md)
 
+**Preview release** — actively tested against real AutoLISP and real APS Design Automation, but still evolving. Issues, suggestions, and pull requests are all welcome.
+
 ## Validated
 
 - **5 independent real APS Design Automation deploys** — not simulated, each a real WorkItem against the live cloud service.
