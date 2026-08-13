@@ -10,15 +10,34 @@ Details: [`skill/SKILL.md`](skill/SKILL.md) · Architecture/status: [`SPEC.md`](
 - **Corpus-wide dry run**: 62/62 real-world `.lsp` files (jtbworld.com corpus) produced a correct Discovery Table, no silent skips.
 - **7/7 full migrations** (scaffold → codegen → build → unit tests, representative sample spanning VLA/COM, file I/O, heaviest interactive-input file in the corpus) — all passing, several real bugs found and fixed in the skill itself along the way (never-let-an-exception-escape-a-command, missing `using` directives, `InternalsVisibleTo` gaps).
 
-## Get started
+## Install
+
+For using the skill as-is — no cloning, no manual copying:
+
+```
+/plugin marketplace add https://github.com/autodesk-platform-services/aps-lisp-dotnet-skill.git
+/plugin install lisp-to-dotnet@aps-lisp-dotnet-skill
+```
+
+Then:
+
+```sh
+dotnet new install skill/templates/acad-lisp-migration
+claude "/lisp-to-dotnet <your-file>.lsp"
+```
+
+## Setup (for contributors)
+
+For editing the skill's own source (`SKILL.md`, templates, references):
 
 ```sh
 git clone https://github.com/autodesk-platform-services/aps-lisp-dotnet-skill.git
 cd aps-lisp-dotnet-skill
 cp -r skill ~/.claude/skills/lisp-to-dotnet
 dotnet new install skill/templates/acad-lisp-migration
-claude "/lisp-to-dotnet <your-file>.lsp"
 ```
+
+Edit under `skill/`, then re-copy to `~/.claude/skills/lisp-to-dotnet` to pick up changes (no separate build step).
 
 ## Before / after
 

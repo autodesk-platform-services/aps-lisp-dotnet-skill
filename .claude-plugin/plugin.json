@@ -1,0 +1,5 @@
+{
+  "name": "lisp-to-dotnet",
+  "description": "AutoLISP to AutoCAD .NET migration skill for Design Automation (DA)",
+  "version": "1.0.0"
+}

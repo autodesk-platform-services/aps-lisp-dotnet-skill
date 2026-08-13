@@ -1,0 +1,8 @@
+{
+  "plugins": [
+    {
+      "name": "lisp-to-dotnet",
+      "source": "./skill"
+    }
+  ]
+}
