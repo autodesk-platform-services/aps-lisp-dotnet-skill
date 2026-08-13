@@ -78,3 +78,8 @@ Design-Automation-only by construction — every migrated command is parameteriz
 Written with Claude Code — human-directed, human-reviewed, and tested end-to-end against real APS Design Automation, not accepted on faith. Every real bug in this skill's own guidance (see `SKILL.md`'s Known Edge Cases) was found through actual testing, not by construction.
 
 The 64-file test corpus (`lisps/`) that this skill was validated against is real-world AutoLISP by Jimmy Bergmark, [JTB World](https://jtbworld.com/autolisp-visual-lisp) — decades of genuinely useful, freely-shared LISP routines, and reuse is explicitly welcomed on the site itself: *"Please feel free to be inspired, cut&paste or if you have any feedback, questions or looking for an AutoLISP programmer for small or large projects go here."* Several of the corpus's real bugs and edge cases (found and fixed as part of validating this skill) trace back to these files — thank you for keeping them public.
+
+---
+
+**Written By**
+Madhukar Moogala (APS)
