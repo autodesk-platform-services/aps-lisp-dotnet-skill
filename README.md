@@ -63,10 +63,13 @@ Edit under `skill/`, then re-copy to `~/.claude/skills/lisp-to-dotnet` to pick u
 
 ![Discovery Table overview](LISP-NET-SKILL.png)
 
-GitHub doesn't inline-preview committed video files — click through to play:
+### Before — desktop AutoLISP, interactive
 
-- ▶ [before.mp4](before.mp4) — desktop AutoLISP, interactive
-- ▶ [after.mp4](after.mp4) — Design Automation, headless, cloud
+https://github.com/user-attachments/assets/2c023344-1b21-48b6-9202-943a0ed8e2fa
+
+### After — Design Automation, headless, cloud
+
+https://github.com/user-attachments/assets/fefd7898-95d9-444d-8f91-c97f600e589e
 
 Design-Automation-only by construction — every migrated command is parameterized and non-interactive, no desktop/interactive output.
 
