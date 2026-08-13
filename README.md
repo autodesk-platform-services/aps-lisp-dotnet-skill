@@ -17,7 +17,10 @@ For using the skill as-is — no cloning, no manual copying:
 ```
 /plugin marketplace add https://github.com/autodesk-platform-services/aps-lisp-dotnet-skill.git
 /plugin install lisp-to-dotnet@aps-lisp-dotnet-skill
+/reload-plugins
 ```
+
+`/reload-plugins` is required after install — without it the skill won't show up in the current session.
 
 Then:
 
