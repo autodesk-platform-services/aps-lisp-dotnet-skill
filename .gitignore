@@ -18,10 +18,8 @@ InternalTrace.*.log
 .env
 da/.env
 
-# Internal-only, not for the public repo/submission
-CHALLENGE-SUBMISSION.md
-blog-post.html
-ppt-outline.md
+# Internal-only, not for the public repo — never listed individually, no one needs to know what's inside
+Ignore/
 
 # Regenerable DA deploy artifacts — keep worked examples to source+config only
 dotnet-outputs/**/da/*.dwg
