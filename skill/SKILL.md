@@ -4,6 +4,7 @@ description: "AutoLISP to AutoCAD .NET migration skill for Design Automation (DA
 argument-hint: "Path to .lsp file (e.g., 'convert gpmain.lsp to a Design Automation plugin')"
 disable-model-invocation: false
 user-invocable: true
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 
 # AutoLISP → AutoCAD .NET Migration Skill (Design Automation)
