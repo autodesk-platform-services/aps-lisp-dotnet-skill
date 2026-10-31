@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -9,18 +10,22 @@ const { buildHolePatternInput, validateHolePatternInput } = require('./validate'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
+// Both /api/schema (file-system read) and /run (APS network calls, DWG upload)
+// do expensive work per request — rate-limit them, not the static demo UI.
+const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
+
 // Factory, not a module-level app — lets tests inject a fake apsClient and a
 // throwaway config instead of hitting the real network. See test/server.test.js.
 function createApp({ apsClient, config }) {
   const app = express();
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
-  app.get('/api/schema', (req, res) => {
+  app.get('/api/schema', apiLimiter, (req, res) => {
     const schema = JSON.parse(fs.readFileSync(config.schemaPath, 'utf8'));
     res.json(schema);
   });
 
-  app.post('/run', upload.single('inputDwg'), async (req, res) => {
+  app.post('/run', apiLimiter, upload.single('inputDwg'), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'inputDwg file is required.' });
