@@ -15,12 +15,14 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",
-    "multer": "^2.0.0"
+    "multer": "^2.3.0"
   },
   "devDependencies": {
     "supertest": "^7.0.0"
   },
   "overrides": {
-    "qs": "^6.16.0"
+    "qs": "^6.17.1",
+    "proxy-addr": "^2.0.8",
+    "body-parser": "^1.20.9"
   }
 }
